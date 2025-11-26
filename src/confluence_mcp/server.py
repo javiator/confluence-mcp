@@ -11,15 +11,42 @@ EMAIL = os.environ.get("CONFLUENCE_EMAIL", "")
 API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN", "")
 
 # Load Configuration
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# Load Configuration
+# Priority:
+# 1. Environment Variable CONFLUENCE_MCP_CONFIG
+# 2. config.json in Current Working Directory
+# 3. config.json in Package Directory (fallback)
 
 def load_config():
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        # Fallback or empty if file missing
-        return {"allowed_spaces": [], "allowed_parents": {}}
+    # 1. Env Var
+    env_config = os.environ.get("CONFLUENCE_MCP_CONFIG")
+    if env_config and os.path.exists(env_config):
+        try:
+            with open(env_config, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # 2. CWD
+    cwd_config = os.path.join(os.getcwd(), "config.json")
+    if os.path.exists(cwd_config):
+        try:
+            with open(cwd_config, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+            
+    # 3. Package Dir (Fallback)
+    pkg_config = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    if os.path.exists(pkg_config):
+        try:
+            with open(pkg_config, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # Default if no config found
+    return {"allowed_spaces": [], "allowed_parents": {}}
 
 config = load_config()
 ALLOWED_SPACES = set(config.get("allowed_spaces", []))
@@ -319,5 +346,4 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
     except requests.RequestException as e:
         return {"error": str(e)}
 
-if __name__ == "__main__":
-    mcp.run(transport='stdio')
+

@@ -11,45 +11,44 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Smart Merge**: Helper tool to fetch context for merging updates into existing pages.
 - **Configurable Access Control**: Permissions are defined in `config.json`, not hardcoded.
 
-## Tools
+## Installation
 
-1.  `search_confluence(query: str)`
-    *   Search for pages in allowed spaces.
-    *   **Restricted**: Results are filtered to match `ALLOWED_SPACES` and, if defined, specific page IDs in `ALLOWED_PARENTS`.
+### Option 1: Install via pip (Recommended)
 
-2.  `get_confluence_page(page_id: str)`
-    *   Get page content.
-    *   Returns both `textContent` (clean text) and `storageContent` (raw HTML).
+You can install the package directly if you have it locally or from a git repo:
 
-3.  `create_confluence_page(space_key: str, parent_id: str, title: str, body: str)`
-    *   Create a new page (HTML body).
-    *   **Restricted**: Must be in `ALLOWED_SPACES` and under `ALLOWED_PARENTS`.
-    *   **Labeling**: Automatically adds the `ai-managed` label.
+```bash
+pip install .
+```
 
-4.  `update_confluence_page_full(page_id: str, body: str)`
-    *   Overwrite a page's body.
-    *   **Restricted**: Page must be in `ALLOWED_SPACES` AND have `ai-generated` or `ai-managed` label.
+### Option 2: Run from source
 
-5.  `prepare_confluence_page_merge_update(page_id: str)`
-    *   Get page content + metadata to help LLMs prepare a merge.
+1.  Clone the repository.
+2.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *Note: `requirements.txt` is provided for convenience, but `pyproject.toml` is the source of truth.*
 
 ## Configuration
 
-### Environment Variables
+### 1. Environment Variables
+
 The server requires the following environment variables for authentication:
 
 *   `CONFLUENCE_BASE_URL`: Base URL of your Confluence instance (e.g., `https://your-domain.atlassian.net/wiki`).
 *   `CONFLUENCE_EMAIL`: Your Atlassian account email.
 *   `CONFLUENCE_API_TOKEN`: Your Atlassian API token.
 
-### Access Control (`config.json`)
-Permissions are managed in `config.json` located in the same directory as `server.py`.
+### 2. Access Control (`config.json`)
+
+Create a `config.json` file in the directory where you will run the server. You can copy `config.example.json` as a starting point.
 
 ```json
 {
   "allowed_spaces": ["AR", "ENG", "KB"],
   "allowed_parents": {
-    "AR": ["2424881", "2490466", "5678", "41058315"],
+    "AR": ["2424881", "2490466"],
     "ENG": ["223344"],
     "KB": ["998877"]
   }
@@ -59,26 +58,49 @@ Permissions are managed in `config.json` located in the same directory as `serve
 *   **allowed_spaces**: List of space keys the AI can access.
 *   **allowed_parents**: Dictionary mapping space keys to a list of Page IDs.
     *   **For Creation**: New pages can *only* be created as children of these IDs.
-    *   **For Search**: Search results are restricted to *only* these IDs (and their children, if the search logic is extended, currently strict ID check).
+    *   **For Search**: Search results are restricted to *only* these IDs.
 
-## Installation & Usage
+The server looks for `config.json` in the following order:
+1.  Path specified by `CONFLUENCE_MCP_CONFIG` environment variable.
+2.  Current working directory.
+3.  Package directory (fallback).
 
-1.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+## Usage
 
-2.  **Configure Permissions**:
-    Edit `config.json` to define your allowed spaces and parent pages.
+### Running the Server
 
-3.  **Run the Server**:
-    ```bash
-    export CONFLUENCE_BASE_URL="https://your-domain.atlassian.net/wiki"
-    export CONFLUENCE_EMAIL="user@example.com"
-    export CONFLUENCE_API_TOKEN="your-api-token"
-    
-    python server.py
-    ```
+If installed via pip:
+
+```bash
+confluence-mcp
+```
+
+If running from source:
+
+```bash
+python -m src.confluence_mcp
+```
+
+### Connecting to an MCP Client
+
+Configure your MCP client (e.g., Claude Desktop, Cursor) to run the server command.
+
+**Example for Claude Desktop (`claude_desktop_config.json`):**
+
+```json
+{
+  "mcpServers": {
+    "confluence": {
+      "command": "confluence-mcp",
+      "env": {
+        "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net/wiki",
+        "CONFLUENCE_EMAIL": "user@example.com",
+        "CONFLUENCE_API_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
 
 ## License
 

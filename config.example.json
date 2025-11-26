@@ -1,0 +1,15 @@
+{
+    "allowed_spaces": [
+        "SPACE1",
+        "SPACE2"
+    ],
+    "allowed_parents": {
+        "SPACE1": [
+            "123456",
+            "789012"
+        ],
+        "SPACE2": [
+            "345678"
+        ]
+    }
+}
