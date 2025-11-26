@@ -106,15 +106,16 @@ uv run chainlit run src/confluence_mcp/agent/app.py -w
 
 ### Connecting to an MCP Client
 
-Configure your MCP client (e.g., Claude Desktop, Cursor) to run the server command.
+You can use this server with any MCP-compatible client (Claude Desktop, Cursor, etc.).
 
-**Example for Claude Desktop (`claude_desktop_config.json`):**
+#### Claude Desktop (`claude_desktop_config.json`)
 
 ```json
 {
   "mcpServers": {
     "confluence": {
-      "command": "confluence-mcp",
+      "command": "uv",
+      "args": ["run", "confluence-mcp"],
       "env": {
         "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net/wiki",
         "CONFLUENCE_EMAIL": "user@example.com",
@@ -124,6 +125,15 @@ Configure your MCP client (e.g., Claude Desktop, Cursor) to run the server comma
   }
 }
 ```
+
+#### Cursor
+
+1.  Go to **Settings** > **MCP**.
+2.  Click **Add New MCP Server**.
+3.  **Name**: `confluence` (or any name you prefer).
+4.  **Type**: `command`.
+5.  **Command**: `uv run confluence-mcp` (ensure you are in the project directory or provide the full path to `uv` and the project).
+6.  **Environment Variables**: Add your `CONFLUENCE_...` keys here.
 
 ## License
 
