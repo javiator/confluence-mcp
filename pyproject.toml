@@ -15,7 +15,15 @@ authors = [
 dependencies = [
     "fastmcp",
     "requests",
-    "beautifulsoup4"
+    "beautifulsoup4",
+    "chainlit",
+    "langgraph",
+    "langchain",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-google-genai",
+    "python-dotenv",
+    "mcp"
 ]
 
 [project.scripts]
