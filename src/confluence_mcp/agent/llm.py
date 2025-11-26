@@ -26,7 +26,7 @@ def get_llm(provider: str = "openai", model: Optional[str] = None) -> BaseChatMo
         return ChatAnthropic(model=model, api_key=api_key, temperature=0)
         
     elif provider == "google":
-        model = model or "gemini-1.5-pro"
+        model = model or "gemini-2.5-flash"
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment")

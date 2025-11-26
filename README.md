@@ -95,15 +95,38 @@ uv run confluence-mcp
 
 This project includes a **Chainlit** agent that connects to the MCP server.
 
-**Standard:**
+**Using the launcher script (recommended):**
+```bash
+./start_agent.sh
+```
+
+This automatically starts the agent with remote access enabled.
+
+**Manual start (local access only):**
 ```bash
 chainlit run src/confluence_mcp/agent/app.py -w
 ```
 
+**Manual start with remote access:**
+```bash
+chainlit run src/confluence_mcp/agent/app.py -w --host 0.0.0.0 --port 8000
+```
+
 **With uv:**
 ```bash
-uv run chainlit run src/confluence_mcp/agent/app.py -w
+uv run chainlit run src/confluence_mcp/agent/app.py -w --host 0.0.0.0 --port 8000
 ```
+
+**Access URLs:**
+- Local: `http://localhost:8000`
+- Remote: `http://<your-ip>:8000` (e.g., `http://192.168.0.179:8000`)
+
+**Features:**
+- 🎤 Voice input (using Google Gemini for transcription)
+- 🔍 Smart search with ancestor filtering
+- 📝 Create and update Confluence pages
+- 💬 Natural language interface
+- 🎯 Starter prompts for common tasks
 
 ### Connecting to an MCP Client
 

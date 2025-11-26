@@ -11,6 +11,7 @@ class MCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = None
         self._tools_cache = []
+        self.transport_ctx = None
 
     async def connect(self):
         """
@@ -24,6 +25,7 @@ class MCPClient:
         )
         
         self.transport_ctx = stdio_client(server_params)
+        # Properly enter the context manager
         self.read_stream, self.write_stream = await self.transport_ctx.__aenter__()
         
         self.session = ClientSession(self.read_stream, self.write_stream)
@@ -36,9 +38,15 @@ class MCPClient:
 
     async def close(self):
         if self.session:
-            await self.session.__aexit__(None, None, None)
+            try:
+                await self.session.__aexit__(None, None, None)
+            except Exception:
+                pass
         if self.transport_ctx:
-            await self.transport_ctx.__aexit__(None, None, None)
+            try:
+                await self.transport_ctx.__aexit__(None, None, None)
+            except (Exception, RuntimeError, GeneratorExit):
+                pass
 
     def get_tools(self):
         """

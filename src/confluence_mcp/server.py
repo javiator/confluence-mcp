@@ -75,21 +75,47 @@ def clean_html(html_content: str) -> str:
 def search_confluence(query: str) -> List[Dict[str, Any]]:
     """
     Search for Confluence pages using CQL.
-    Returns pages only from allowed spaces.
+    Returns pages only from allowed spaces and within allowed parent hierarchies.
+    If a parent page is specified in config, all its descendants are automatically allowed.
     """
+    # Build base CQL query
     if "=" in query or " IN " in query.upper():
         # Assume raw CQL
-        cql = f'({query}) AND type=page'
+        base_cql = f'({query}) AND type=page'
     else:
         # Simple text search
-        cql = f'text~"{query}" AND type=page'
+        base_cql = f'text~"{query}" AND type=page'
+    
+    # Build space filter
+    if ALLOWED_SPACES:
+        space_filter = " OR ".join([f'space = "{s}"' for s in ALLOWED_SPACES])
+        base_cql = f'{base_cql} AND ({space_filter})'
+    
+    # Build ancestor filter for each space
+    # This allows any page that is either:
+    # 1. One of the allowed parent pages (id in (...))
+    # 2. A descendant of an allowed parent page (ancestor in (...))
+    ancestor_filters = []
+    for space_key, parent_ids in ALLOWED_PARENTS.items():
+        if parent_ids:
+            parent_list = ", ".join(parent_ids)
+            # Match pages that are either the parent itself OR have the parent as an ancestor
+            space_ancestor_filter = f'(space = "{space_key}" AND (id in ({parent_list}) OR ancestor in ({parent_list})))'
+            ancestor_filters.append(space_ancestor_filter)
+    
+    if ancestor_filters:
+        ancestor_cql = " OR ".join(ancestor_filters)
+        cql = f'{base_cql} AND ({ancestor_cql})'
+    else:
+        cql = base_cql
+    
     url = f"{BASE_URL}/rest/api/search"
     
     try:
         response = requests.get(
             url,
             auth=get_auth(),
-            params={"cql": cql, "limit": 50, "expand": "ancestors"},
+            params={"cql": cql, "limit": 50},
             headers=get_headers()
         )
         response.raise_for_status()
@@ -97,15 +123,13 @@ def search_confluence(query: str) -> List[Dict[str, Any]]:
         
         results = []
         for result in data.get("results", []):
-            # The search API response structure is complex.
-            # We try to extract space key from 'resultGlobalContainer' or parse it from 'url'.
+            # Extract space key
             space_key = None
             
             # Method 1: Try resultGlobalContainer
             container = result.get("resultGlobalContainer", {})
             display_url = container.get("displayUrl", "")
             if "/spaces/" in display_url:
-                # Format: /spaces/KEY or /spaces/KEY/pages/...
                 parts = display_url.split("/spaces/")
                 if len(parts) > 1:
                     space_key = parts[1].split("/")[0]
@@ -117,28 +141,15 @@ def search_confluence(query: str) -> List[Dict[str, Any]]:
                     parts = web_url.split("/spaces/")
                     if len(parts) > 1:
                         space_key = parts[1].split("/")[0]
-
-            # Filter by allowed spaces
-            if space_key not in ALLOWED_SPACES:
-                continue
-
-            # Filter by allowed pages (strict ID check OR ancestor check)
-            # This restricts results to the pages explicitly listed in ALLOWED_PARENTS OR their descendants.
-            page_id = result.get("content", {}).get("id") or result.get("id")
-            allowed_ids = ALLOWED_PARENTS.get(space_key, set())
             
-            # Check ancestors
-            ancestors = result.get("ancestors", [])
-            if not ancestors:
-                ancestors = result.get("content", {}).get("ancestors", [])
-            
-            ancestor_ids = {a.get("id") for a in ancestors}
-            
-            if page_id not in allowed_ids and not ancestor_ids.intersection(allowed_ids):
-                continue
+            # Method 3: Try content.space
+            if not space_key:
+                space_key = result.get("content", {}).get("space", {}).get("key")
                 
+            page_id = result.get("content", {}).get("id") or result.get("id")
+            
             results.append({
-                "id": page_id,
+                "id": str(page_id),
                 "title": result.get("title"),
                 "spaceKey": space_key,
                 "url": f"{BASE_URL}{result.get('url', '')}",

@@ -23,7 +23,8 @@ dependencies = [
     "langchain-anthropic",
     "langchain-google-genai",
     "python-dotenv",
-    "mcp"
+    "mcp",
+    "google-generativeai"
 ]
 
 [project.scripts]
