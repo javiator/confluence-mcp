@@ -359,4 +359,68 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
     except requests.RequestException as e:
         return {"error": str(e)}
 
+@mcp.tool()
+def get_confluence_children(page_id: str) -> List[Dict[str, Any]]:
+    """
+    Get direct child pages of a specific page.
+    Useful for navigating the hierarchy when search is unreliable.
+    """
+    # 1. Verify access to the parent page first
+    url_parent = f"{BASE_URL}/rest/api/content/{page_id}"
+    try:
+        response = requests.get(
+            url_parent,
+            auth=get_auth(),
+            params={"expand": "ancestors,space"},
+            headers=get_headers()
+        )
+        response.raise_for_status()
+        parent_data = response.json()
+        
+        space_key = parent_data.get("space", {}).get("key")
+        if space_key not in ALLOWED_SPACES:
+             return [{"error": f"Space '{space_key}' not allowed"}]
+
+        allowed_ids = ALLOWED_PARENTS.get(space_key, set())
+        
+        # Check if parent itself is allowed or is a descendant of an allowed page
+        is_allowed = False
+        if page_id in allowed_ids:
+            is_allowed = True
+        else:
+            ancestors = parent_data.get("ancestors", [])
+            ancestor_ids = {a.get("id") for a in ancestors}
+            if ancestor_ids.intersection(allowed_ids):
+                is_allowed = True
+        
+        if not is_allowed:
+             return [{"error": "Parent page is not accessible under current permissions"}]
+
+    except requests.RequestException as e:
+        return [{"error": f"Error verifying parent page: {str(e)}"}]
+
+    # 2. Fetch Children
+    url_children = f"{BASE_URL}/rest/api/content/{page_id}/child/page"
+    try:
+        response = requests.get(
+            url_children,
+            auth=get_auth(),
+            params={"limit": 50},
+            headers=get_headers()
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        results = []
+        for result in data.get("results", []):
+            results.append({
+                "id": result.get("id"),
+                "title": result.get("title"),
+                "url": f"{BASE_URL}{result.get('_links', {}).get('webui', '')}"
+            })
+        return results
+        
+    except requests.RequestException as e:
+        return [{"error": f"Error fetching children: {str(e)}"}]
+
 
