@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Create**: Create new pages in whitelisted spaces and under specific parent pages. Automatically applies the `ai-managed` label.
 - **Update**: Safely update pages. Enforces that pages must have the `ai-managed` or `ai-generated` label to be modifiable.
 - **Smart Merge**: Helper tool to fetch context for merging updates into existing pages.
+- **Get Children**: Retrieve direct child pages of a specific page. Useful for navigating the hierarchy when search is unreliable.
 - **Configurable Access Control**: Permissions are defined in `config.json`, not hardcoded.
 
 ## Installation
