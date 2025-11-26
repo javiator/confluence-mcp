@@ -77,14 +77,19 @@ def search_confluence(query: str) -> List[Dict[str, Any]]:
     Search for Confluence pages using CQL.
     Returns pages only from allowed spaces.
     """
-    cql = f'text~"{query}" AND type=page'
+    if "=" in query or " IN " in query.upper():
+        # Assume raw CQL
+        cql = f'({query}) AND type=page'
+    else:
+        # Simple text search
+        cql = f'text~"{query}" AND type=page'
     url = f"{BASE_URL}/rest/api/search"
     
     try:
         response = requests.get(
             url,
             auth=get_auth(),
-            params={"cql": cql, "limit": 50},
+            params={"cql": cql, "limit": 50, "expand": "ancestors"},
             headers=get_headers()
         )
         response.raise_for_status()
@@ -117,11 +122,19 @@ def search_confluence(query: str) -> List[Dict[str, Any]]:
             if space_key not in ALLOWED_SPACES:
                 continue
 
-            # Filter by allowed pages (strict ID check)
-            # This restricts results to ONLY the pages explicitly listed in ALLOWED_PARENTS.
+            # Filter by allowed pages (strict ID check OR ancestor check)
+            # This restricts results to the pages explicitly listed in ALLOWED_PARENTS OR their descendants.
             page_id = result.get("content", {}).get("id") or result.get("id")
             allowed_ids = ALLOWED_PARENTS.get(space_key, set())
-            if page_id not in allowed_ids:
+            
+            # Check ancestors
+            ancestors = result.get("ancestors", [])
+            if not ancestors:
+                ancestors = result.get("content", {}).get("ancestors", [])
+            
+            ancestor_ids = {a.get("id") for a in ancestors}
+            
+            if page_id not in allowed_ids and not ancestor_ids.intersection(allowed_ids):
                 continue
                 
             results.append({
