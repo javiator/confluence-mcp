@@ -21,7 +21,15 @@ You can install the package directly if you have it locally or from a git repo:
 pip install .
 ```
 
-### Option 2: Run from source
+### Option 2: Install via uv (Fastest)
+
+If you use [uv](https://github.com/astral-sh/uv), you can install dependencies and run the project efficiently.
+
+```bash
+uv pip install .
+```
+
+### Option 3: Run from source
 
 1.  Clone the repository.
 2.  Install dependencies:
@@ -39,6 +47,9 @@ The server requires the following environment variables for authentication:
 *   `CONFLUENCE_BASE_URL`: Base URL of your Confluence instance (e.g., `https://your-domain.atlassian.net/wiki`).
 *   `CONFLUENCE_EMAIL`: Your Atlassian account email.
 *   `CONFLUENCE_API_TOKEN`: Your Atlassian API token.
+
+For the **Agent**, you also need LLM keys:
+*   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`.
 
 ### 2. Access Control (`config.json`)
 
@@ -67,18 +78,30 @@ The server looks for `config.json` in the following order:
 
 ## Usage
 
-### Running the Server
+### Running the MCP Server
 
-If installed via pip:
-
+**Standard:**
 ```bash
 confluence-mcp
 ```
 
-If running from source:
-
+**With uv:**
 ```bash
-python -m src.confluence_mcp
+uv run confluence-mcp
+```
+
+### Running the Conversational Agent
+
+This project includes a **Chainlit** agent that connects to the MCP server.
+
+**Standard:**
+```bash
+chainlit run src/confluence_mcp/agent/app.py -w
+```
+
+**With uv:**
+```bash
+uv run chainlit run src/confluence_mcp/agent/app.py -w
 ```
 
 ### Connecting to an MCP Client
