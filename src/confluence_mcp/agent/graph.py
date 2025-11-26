@@ -2,8 +2,8 @@ from typing import Annotated, Literal, TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from .client import MCPClient
-from .llm import get_llm
+from src.confluence_mcp.agent.client import MCPClient
+from src.confluence_mcp.agent.llm import get_llm
 import json
 
 class AgentState(TypedDict):

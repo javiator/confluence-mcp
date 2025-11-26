@@ -1,7 +1,7 @@
 import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
-from .client import MCPClient
-from .graph import create_graph
+from src.confluence_mcp.agent.client import MCPClient
+from src.confluence_mcp.agent.graph import create_graph
 import os
 
 # Global MCP Client
