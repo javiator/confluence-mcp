@@ -23,9 +23,11 @@
 - **[CLAUDE_CODE_GUIDE.md](./CLAUDE_CODE_GUIDE.md)** - Effective prompts & collaboration tips
 - **[LEARNING_SETUP.md](./LEARNING_SETUP.md)** - Setup instructions & daily workflow
 
-### 🛠️ Scripts
-- **[scripts/phase0_setup.sh](./scripts/phase0_setup.sh)** - Automated environment setup
-- **[scripts/phase_helper.sh](./scripts/phase_helper.sh)** - Progress checking utilities
+### 🛠️ Scripts & Tools
+- **[scripts/phase0_setup.sh](./scripts/phase0_setup.sh)** - Automated environment setup (uses uv)
+- **[scripts/phase_helper.sh](./scripts/phase_helper.sh)** - Phase management utilities
+- **[scripts/next-phase.sh](./scripts/next-phase.sh)** - Create next phase branch automatically
+- **[GIT_BRANCHING_STRATEGY.md](./GIT_BRANCHING_STRATEGY.md)** - Git workflow and branching guide
 
 ---
 
@@ -113,6 +115,37 @@ See [BLOG_TEMPLATE.md](./BLOG_TEMPLATE.md) for format details.
 
 ---
 
+## 🛠️ Tech Stack & Tools
+
+### Package Management: uv
+All Python commands use **[uv](https://github.com/astral-sh/uv)** - the fast Python package installer:
+- Faster than pip
+- Better dependency resolution
+- Consistent environments
+
+```bash
+# Run with uv
+uv run confluence-mcp
+uv run pytest tests/
+uv run chainlit run src/confluence_mcp/agent/app.py
+```
+
+### Git Strategy: Phase Branches
+Each phase gets its own branch:
+```
+learning/phase-0 → learning/phase-1 → learning/phase-2 → ...
+```
+
+Benefits:
+- Progressive history
+- Isolated experiments
+- Blog alignment (branch = evolution)
+- Easy comparison
+
+See [GIT_BRANCHING_STRATEGY.md](./GIT_BRANCHING_STRATEGY.md) for details.
+
+---
+
 ## 🚀 Quick Start (3 Steps)
 
 ### 1. Read the Plan (15 minutes)
@@ -126,8 +159,11 @@ cat ROADMAP.md
 
 ### 2. Set Up Environment (5 minutes)
 ```bash
+# Installs uv, creates .venv, installs dependencies, creates learning/phase-0 branch
 ./scripts/phase0_setup.sh
-source venv-multiagent/bin/activate
+
+# Activate environment
+source .venv/bin/activate
 ```
 
 ### 3. Start Phase 0 (1-3 days)

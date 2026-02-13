@@ -14,34 +14,44 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Step 1: Create learning branch
-echo "📦 Step 1: Creating learning branch..."
-git checkout -b learning/multi-agent-journey 2>/dev/null || git checkout learning/multi-agent-journey
-echo -e "${GREEN}✓${NC} Branch created/switched to: learning/multi-agent-journey"
+# Step 1: Create Phase 0 branch
+echo "📦 Step 1: Creating Phase 0 branch..."
+git checkout -b learning/phase-0 2>/dev/null || git checkout learning/phase-0
+echo -e "${GREEN}✓${NC} Branch created/switched to: learning/phase-0"
 echo ""
 
-# Step 2: Set up Python environment
-echo "🐍 Step 2: Setting up Python environment..."
-if [ ! -d "venv-multiagent" ]; then
-    python3 -m venv venv-multiagent
+# Step 2: Check for uv
+echo "🔍 Step 2: Checking for uv..."
+if ! command -v uv &> /dev/null; then
+    echo -e "${YELLOW}⚠${NC}  uv not found. Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    echo -e "${GREEN}✓${NC} uv installed"
+else
+    echo -e "${GREEN}✓${NC} uv found"
+fi
+
+# Step 3: Set up Python environment with uv
+echo "🐍 Step 3: Setting up Python environment with uv..."
+if [ ! -d ".venv" ]; then
+    uv venv
     echo -e "${GREEN}✓${NC} Virtual environment created"
 else
     echo -e "${YELLOW}ℹ${NC} Virtual environment already exists"
 fi
 
 # Activate venv
-source venv-multiagent/bin/activate
+source .venv/bin/activate
 
-# Install base dependencies
-echo "📦 Installing base dependencies..."
-pip install -q --upgrade pip
-pip install -q -e .
+# Install base dependencies with uv
+echo "📦 Installing base dependencies with uv..."
+uv pip install --upgrade pip
+uv pip install -e .
 echo -e "${GREEN}✓${NC} Base dependencies installed"
 echo ""
 
-# Step 3: Install framework dependencies
-echo "🧪 Step 3: Installing framework dependencies..."
-pip install -q \
+# Step 4: Install framework dependencies with uv
+echo "🧪 Step 4: Installing framework dependencies with uv..."
+uv pip install \
     crewai \
     crewai-tools \
     boto3 \
@@ -56,8 +66,8 @@ pip install -q \
 echo -e "${GREEN}✓${NC} Framework dependencies installed"
 echo ""
 
-# Step 4: Create directory structure
-echo "📁 Step 4: Creating directory structure..."
+# Step 5: Create directory structure
+echo "📁 Step 5: Creating directory structure..."
 mkdir -p tests/
 mkdir -p src/confluence_mcp/agent/agents/
 mkdir -p src/confluence_mcp/agent/frameworks/
@@ -68,8 +78,8 @@ mkdir -p benchmarks/
 echo -e "${GREEN}✓${NC} Directory structure created"
 echo ""
 
-# Step 5: Create basic test file
-echo "🧪 Step 5: Creating basic test structure..."
+# Step 6: Create basic test file
+echo "🧪 Step 6: Creating basic test structure..."
 cat > tests/test_phase0.py << 'EOF'
 """
 Phase 0: Foundation Tests
@@ -100,8 +110,8 @@ EOF
 echo -e "${GREEN}✓${NC} Test structure created"
 echo ""
 
-# Step 6: Create Phase 0 documentation
-echo "📝 Step 6: Creating Phase 0 documentation..."
+# Step 7: Create Phase 0 documentation
+echo "📝 Step 7: Creating Phase 0 documentation..."
 cat > docs/PHASE0_NOTES.md << 'EOF'
 # Phase 0: Foundation & Audit - Notes
 
@@ -157,8 +167,8 @@ EOF
 echo -e "${GREEN}✓${NC} Documentation template created"
 echo ""
 
-# Step 7: Run basic checks
-echo "✅ Step 7: Running basic checks..."
+# Step 8: Run basic checks
+echo "✅ Step 8: Running basic checks..."
 
 echo "  Checking Python version..."
 python --version
@@ -200,18 +210,23 @@ echo "║   ✓ Phase 0 Setup Complete!                   ║"
 echo "╚════════════════════════════════════════════════╝"
 echo ""
 echo "📋 What was created:"
-echo "  • Learning branch: learning/multi-agent-journey"
-echo "  • Virtual environment: venv-multiagent"
+echo "  • Phase 0 branch: learning/phase-0"
+echo "  • Virtual environment: .venv (managed by uv)"
 echo "  • Test structure: tests/test_phase0.py"
 echo "  • Documentation: docs/PHASE0_NOTES.md"
 echo "  • Helper scripts: scripts/phase_helper.sh"
 echo ""
 echo "🎯 Next Steps:"
-echo "  1. Activate environment: source venv-multiagent/bin/activate"
-echo "  2. Run the MCP server: confluence-mcp"
-echo "  3. Run the Chainlit UI: chainlit run src/confluence_mcp/agent/app.py"
+echo "  1. Activate environment: source .venv/bin/activate"
+echo "  2. Run the MCP server: uv run confluence-mcp"
+echo "  3. Run the Chainlit UI: uv run chainlit run src/confluence_mcp/agent/app.py"
 echo "  4. Audit the codebase and fill in docs/PHASE0_NOTES.md"
-echo "  5. Run tests: pytest tests/ -v"
+echo "  5. Run tests: uv run pytest tests/ -v"
+echo ""
+echo "🌳 Git Branching Strategy:"
+echo "  • Current branch: learning/phase-0"
+echo "  • When done: Create learning/phase-1 from phase-0"
+echo "  • Pattern: Each phase branches from previous"
 echo ""
 echo "💡 Tips:"
 echo "  • Use 'scripts/phase_helper.sh status' to check progress"
