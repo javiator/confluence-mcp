@@ -8,8 +8,9 @@
 
 This roadmap takes you from a basic Confluence MCP server to a production-ready multi-agent system through hands-on learning and framework experimentation.
 
-**Total Duration**: 7-10 phases (~2-4 months depending on pace)
-**Approach**: Build → Learn → Compare → Choose → Scale
+**Total Duration**: 11 phases (flexible timeline - learn at your pace)
+**Approach**: Build → Learn → Blog → Compare → Choose → Scale
+**Blog Updates**: Each phase includes blog post evolution (architectureon.co.uk style)
 
 ---
 
@@ -31,21 +32,26 @@ By the end of this journey, you will:
 | **LangGraph** | Medium | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Free | Custom workflows |
 | **CrewAI** | Easy | ⭐⭐⭐ | ⭐⭐⭐ | Free | Role-based agents |
 | **AWS Bedrock Agents** | Easy | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$ | Enterprise/AWS |
+| **Microsoft AI Foundry** | Medium | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$ | Enterprise/Azure |
 | **Google Vertex AI** | Medium | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $$ | Enterprise/GCP |
-| **AutoGen** | Medium | ⭐⭐⭐⭐ | ⭐⭐⭐ | Free | Research/Collab |
+| **n8n Workflows** | Easy | ⭐⭐⭐ | ⭐⭐⭐⭐ | Free/$ | Low-code/Business users |
+
+**Your Profile**: Intermediate - can move faster, less detailed instructions needed
 
 ---
 
 # Phase 0: Foundation & Current State Audit 🏗️
 
-**Duration**: 2-3 days
+**Duration**: Flexible (1-3 days)
 **Goal**: Understand what you have and set up for success
+**Blog**: Evolution 0 - "Foundation & Baseline"
 
 ## Objectives
 - [ ] Audit current codebase
 - [ ] Set up development environment
 - [ ] Document current capabilities
 - [ ] Create testing framework
+- [ ] **Write blog post** documenting current state
 
 ## Tasks
 
@@ -89,12 +95,22 @@ def test_page_creation():
 - ✅ Clean development environment
 - ✅ Current capability documentation
 - ✅ Basic test suite
-- ✅ Git branch strategy
+- ✅ Performance baseline metrics (response time, token usage)
+- ✅ **Blog Post**: "Evolution 0: Foundation & Current State" ([template](./BLOG_TEMPLATE.md))
 
 ## Learning Outcomes
 - Current system architecture
 - MCP protocol basics
 - LangGraph fundamentals
+- Baseline performance for comparison
+
+## Blog Post Content
+Document in evolution format:
+- Current architecture (single-agent)
+- Existing capabilities (6 MCP tools)
+- Performance baseline
+- Pain points identified
+- What you plan to improve
 
 ---
 
