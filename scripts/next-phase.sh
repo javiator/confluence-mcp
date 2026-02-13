@@ -5,15 +5,27 @@ set -e
 
 CURRENT_BRANCH=$(git branch --show-current)
 
-if [[ $CURRENT_BRANCH =~ learning/phase-([0-9]+) ]]; then
+# Extract session ID from current branch (format: claude/phase-N-SESSION_ID or claude/project-name-SESSION_ID)
+if [[ $CURRENT_BRANCH =~ claude/phase-([0-9]+)-(.+)$ ]]; then
     CURRENT_PHASE=${BASH_REMATCH[1]}
+    SESSION_ID=${BASH_REMATCH[2]}
     NEXT_PHASE=$((CURRENT_PHASE + 1))
+elif [[ $CURRENT_BRANCH =~ claude/.+-(.+)$ ]]; then
+    # First time - on project branch, starting phase 1
+    CURRENT_PHASE=0
+    SESSION_ID=${BASH_REMATCH[1]}
+    NEXT_PHASE=1
+else
+    echo "❌ Error: Could not determine session ID from branch: ${CURRENT_BRANCH}"
+    echo "Expected format: claude/phase-N-SESSION_ID or claude/project-name-SESSION_ID"
+    exit 1
+fi
 
-    echo "🌳 Creating next phase branch"
-    echo "================================"
-    echo ""
-    echo "Current: learning/phase-${CURRENT_PHASE}"
-    echo "Next: learning/phase-${NEXT_PHASE}"
+echo "🌳 Creating next phase branch"
+echo "================================"
+echo ""
+echo "Current: ${CURRENT_BRANCH} (Phase ${CURRENT_PHASE})"
+echo "Next: claude/phase-${NEXT_PHASE}-${SESSION_ID}"
     echo ""
 
     # Check for uncommitted changes
@@ -28,7 +40,7 @@ if [[ $CURRENT_BRANCH =~ learning/phase-([0-9]+) ]]; then
             git add .
             read -p "Commit message: Phase ${CURRENT_PHASE}: " COMMIT_MSG
             git commit -m "Phase ${CURRENT_PHASE}: ${COMMIT_MSG}"
-            git push origin "learning/phase-${CURRENT_PHASE}"
+            git push origin "${CURRENT_BRANCH}"
             echo "✓ Changes committed and pushed"
         else
             echo "❌ Aborting. Commit your changes first."
@@ -38,12 +50,12 @@ if [[ $CURRENT_BRANCH =~ learning/phase-([0-9]+) ]]; then
 
     # Create new branch
     echo ""
-    echo "Creating learning/phase-${NEXT_PHASE}..."
-    git checkout -b "learning/phase-${NEXT_PHASE}"
+    echo "Creating claude/phase-${NEXT_PHASE}-${SESSION_ID}..."
+    git checkout -b "claude/phase-${NEXT_PHASE}-${SESSION_ID}"
 
     # Push to remote
     echo "Pushing to remote..."
-    git push -u origin "learning/phase-${NEXT_PHASE}"
+    git push -u origin "claude/phase-${NEXT_PHASE}-${SESSION_ID}"
 
     echo ""
     echo "✅ Success!"
