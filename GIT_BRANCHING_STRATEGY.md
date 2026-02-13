@@ -9,29 +9,29 @@
 ```
 main (production-ready code)
   │
-  └─ learning/phase-0 (Foundation)
+  └─ claude/phase-0-SESSION_ID (Foundation)
        │
-       ├─ learning/phase-1 (First Multi-Agent)
+       ├─ claude/phase-1-SESSION_ID (First Multi-Agent)
        │    │
-       │    └─ learning/phase-2 (Memory & Intelligence)
+       │    └─ claude/phase-2-SESSION_ID (Memory & Intelligence)
        │         │
-       │         ├─ learning/phase-3 (CrewAI)
+       │         ├─ claude/phase-3-SESSION_ID (CrewAI)
        │         │    │
-       │         │    └─ learning/phase-4 (AWS Bedrock)
+       │         │    └─ claude/phase-4-SESSION_ID (AWS Bedrock)
        │         │         │
-       │         │         ├─ learning/phase-5 (Azure AI Foundry)
+       │         │         ├─ claude/phase-5-SESSION_ID (Azure AI Foundry)
        │         │         │    │
-       │         │         │    └─ learning/phase-6 (Google Vertex AI)
+       │         │         │    └─ claude/phase-6-SESSION_ID (Google Vertex AI)
        │         │         │         │
-       │         │         │         └─ learning/phase-7 (n8n)
+       │         │         │         └─ claude/phase-7-SESSION_ID (n8n)
        │         │         │              │
-       │         │         │              └─ learning/phase-8 (Decision)
+       │         │         │              └─ claude/phase-8-SESSION_ID (Decision)
        │         │         │                   │
-       │         │         │                   └─ learning/phase-9 (Production)
+       │         │         │                   └─ claude/phase-9-SESSION_ID (Production)
        │         │         │                        │
-       │         │         │                        └─ learning/phase-10 (Advanced)
+       │         │         │                        └─ claude/phase-10-SESSION_ID (Advanced)
        │         │         │                             │
-       │         │         │                             └─ learning/phase-11 (Polish)
+       │         │         │                             └─ claude/phase-11-SESSION_ID (Polish)
        │         │         │                                  │
        │         │         │                                  └─ (merge to main)
 ```
@@ -41,10 +41,17 @@ main (production-ready code)
 ## 📋 Branch Naming Convention
 
 ```
-learning/phase-{N}
+claude/phase-{N}-{SESSION_ID}
 ```
 
-Where `{N}` is the phase number (0-11).
+Where:
+- `{N}` is the phase number (0-11)
+- `{SESSION_ID}` is extracted from your current Claude Code session (e.g., `ceArC`)
+
+**Why this format?**
+- `claude/*` prefix required for GitHub push
+- Session ID ensures uniqueness and traceability
+- Phase number for clear organization
 
 ---
 
@@ -55,19 +62,27 @@ Where `{N}` is the phase number (0-11).
 ```bash
 # Example: Moving from Phase 0 to Phase 1
 
+# EASY WAY: Use the script (recommended)
+./scripts/next-phase.sh
+# This automatically:
+# - Commits any uncommitted changes
+# - Creates claude/phase-1-SESSION_ID
+# - Pushes to remote
+
+# MANUAL WAY:
 # 1. Ensure Phase 0 work is committed
 git status
 git add .
 git commit -m "Phase 0: Complete foundation and baseline"
 
 # 2. Push Phase 0 branch
-git push -u origin learning/phase-0
+git push origin claude/phase-0-ceArC
 
 # 3. Create Phase 1 branch FROM Phase 0
-git checkout -b learning/phase-1
+git checkout -b claude/phase-1-ceArC
 
 # 4. Push Phase 1 branch
-git push -u origin learning/phase-1
+git push -u origin claude/phase-1-ceArC
 
 # 5. Start working on Phase 1
 ```

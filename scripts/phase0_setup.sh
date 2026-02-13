@@ -14,10 +14,24 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Step 1: Create Phase 0 branch
-echo "📦 Step 1: Creating Phase 0 branch..."
-git checkout -b learning/phase-0 2>/dev/null || git checkout learning/phase-0
-echo -e "${GREEN}✓${NC} Branch created/switched to: learning/phase-0"
+# Step 1: Determine branch name
+echo "📦 Step 1: Setting up Phase 0 branch..."
+
+# Get current branch to extract session ID
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ $CURRENT_BRANCH =~ claude/.+-(.+)$ ]]; then
+    SESSION_ID=${BASH_REMATCH[1]}
+    PHASE0_BRANCH="claude/phase-0-${SESSION_ID}"
+else
+    # Fallback if not on a claude branch
+    echo -e "${YELLOW}⚠${NC}  Not on a claude/* branch. Using default session ID."
+    SESSION_ID="session"
+    PHASE0_BRANCH="claude/phase-0-${SESSION_ID}"
+fi
+
+echo "Creating branch: ${PHASE0_BRANCH}"
+git checkout -b "${PHASE0_BRANCH}" 2>/dev/null || git checkout "${PHASE0_BRANCH}"
+echo -e "${GREEN}✓${NC} Branch: ${PHASE0_BRANCH}"
 echo ""
 
 # Step 2: Check for uv
@@ -210,7 +224,7 @@ echo "║   ✓ Phase 0 Setup Complete!                   ║"
 echo "╚════════════════════════════════════════════════╝"
 echo ""
 echo "📋 What was created:"
-echo "  • Phase 0 branch: learning/phase-0"
+echo "  • Phase 0 branch: ${PHASE0_BRANCH}"
 echo "  • Virtual environment: .venv (managed by uv)"
 echo "  • Test structure: tests/test_phase0.py"
 echo "  • Documentation: docs/PHASE0_NOTES.md"
@@ -224,9 +238,9 @@ echo "  4. Audit the codebase and fill in docs/PHASE0_NOTES.md"
 echo "  5. Run tests: uv run pytest tests/ -v"
 echo ""
 echo "🌳 Git Branching Strategy:"
-echo "  • Current branch: learning/phase-0"
-echo "  • When done: Create learning/phase-1 from phase-0"
-echo "  • Pattern: Each phase branches from previous"
+echo "  • Current branch: ${PHASE0_BRANCH}"
+echo "  • When done: Run ./scripts/next-phase.sh"
+echo "  • Pattern: claude/phase-N-SESSION_ID"
 echo ""
 echo "💡 Tips:"
 echo "  • Use 'scripts/phase_helper.sh status' to check progress"
