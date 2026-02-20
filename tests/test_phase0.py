@@ -3,7 +3,7 @@ Phase 0: Foundation Tests
 Test current capabilities to establish baseline
 """
 import pytest
-from src.confluence_mcp.server import search_confluence, get_confluence_page
+from confluence_mcp.server import mcp
 
 def test_environment_setup():
     """Verify environment is set up correctly"""
@@ -20,5 +20,19 @@ def test_imports():
         assert True
     except ImportError as e:
         pytest.fail(f"Missing dependency: {e}")
+
+def test_mcp_server_has_tools():
+    """Verify MCP server has expected 6 tools registered"""
+    tool_names = list(mcp._tool_manager._tools.keys())
+    expected = [
+        "search_confluence",
+        "get_confluence_page",
+        "get_confluence_children",
+        "create_confluence_page",
+        "update_confluence_page_full",
+        "prepare_confluence_page_merge_update",
+    ]
+    for tool in expected:
+        assert tool in tool_names, f"Missing MCP tool: {tool}"
 
 # Add more tests as you understand the codebase
