@@ -24,6 +24,7 @@
 - Less fine-grained control over specific execution paths compared to LangGraph.
 - Debugging cross-thread issues is non-trivial.
 - Statically typed tool schemas are harder to generate dynamically than LangChain's `StructuredTool`.
+- **Memory Handling**: CrewAI Tasks are stateless by default. Conversation history from frameworks like Chainlit must be manually formatted and injected into task descriptions to maintain context.
 
 ## Verdict
 - **Current Choice**: LangGraph remains better for complex, cyclical, or human-gate-heavy systems. 

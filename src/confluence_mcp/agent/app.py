@@ -183,6 +183,18 @@ async def on_message(message: cl.Message):
         writer_agent = crew_components["writer_agent"]
         reviewer_agent = crew_components["reviewer_agent"]
 
+        # 1. Format conversation history for context
+        # We take the last 6 messages to keep the context window management simple
+        def format_history(messages, limit=6):
+            formatted = []
+            for msg in messages[-limit:]:
+                role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+                formatted.append(f"{role}: {msg.content}")
+            return "\n".join(formatted)
+        
+        chat_context = format_history(history)
+        context_prompt = f"\n\nConversation Context:\n{chat_context}" if chat_context else ""
+
         # ---------------------------------------------------------
         # Phase 3: CREWAI EXECUTION PATH WITH CALLBACKS
         # ---------------------------------------------------------
@@ -196,12 +208,12 @@ async def on_message(message: cl.Message):
         if any(word in user_input for word in ["create", "update", "write", "draft"]):
             # Write + Review flow
             write_task = Task(
-                description=f'Fulfill this user request to write/update documentation: "{message.content}"',
+                description=f'Fulfill this user request to write/update documentation: "{message.content}"{context_prompt}',
                 agent=writer_agent,
                 expected_output='Properly formatted Confluence XHTML content, drafted or published.'
             )
             review_task = Task(
-                description='Review the drafted content from the writer. If it needs fixing, explain what must change. If it is good, approve it.',
+                description=f'Review the drafted content from the writer. If it needs fixing, explain what must change. If it is good, approve it.{context_prompt}',
                 agent=reviewer_agent,
                 expected_output='A review summary: APPROVED or NEEDS REVISION.',
                 context=[write_task]
@@ -210,7 +222,7 @@ async def on_message(message: cl.Message):
         else:
             # Default to Search
             search_task = Task(
-                description=f'Find information to answer this user query: "{message.content}"',
+                description=f'Find information to answer this user query: "{message.content}"{context_prompt}',
                 agent=search_agent,
                 expected_output='A summary of findings with Confluence page titles and URLs.'
             )
