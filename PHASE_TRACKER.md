@@ -6,11 +6,11 @@
 
 ## 🎯 Current Status
 
-**Current Phase**: Phase 1 - First Multi-Agent (LangGraph) ✅ COMPLETE
-**Current Branch**: `claude/phase-1-ceArC`
+**Current Phase**: Phase 2 - Intelligence & Memory ✅ COMPLETE
+**Current Branch**: `claude/phase-2-ceArC`
 **Started**: 2026-02-20
 **Completed**: 2026-02-20 (same day!)
-**Status**: 🟢 Complete - Ready for Phase 2
+**Status**: 🟢 Complete - Ready for Phase 3
 
 ---
 
@@ -20,7 +20,7 @@
 |-------|-------|----------|--------|--------|-------|
 | **Phase 0** | Foundation & Audit | 2-3 days | 🟢 Complete | `claude/phase-0-ceArC` | All 3 tests passing |
 | **Phase 1** | First Multi-Agent (LangGraph) | 1 week | 🟢 Complete | `claude/phase-1-ceArC` | 13/13 tests passing |
-| **Phase 2** | Intelligence & Memory | 1 week | ⚪ Pending | `claude/phase-2-ceArC` | |
+| **Phase 2** | Intelligence & Memory | 1 day | 🟢 Complete | `claude/phase-2-ceArC` | 12/12 tests passing |
 | **Phase 3** | Experiment: CrewAI | 1 week | ⚪ Pending | `claude/phase-3-ceArC` | |
 | **Phase 4** | Experiment: AWS Bedrock | 1 week | ⚪ Pending | `claude/phase-4-ceArC` | |
 | **Phase 5** | Experiment: Google Vertex | 1 week | ⚪ Pending | `claude/phase-5-ceArC` | |
@@ -105,6 +105,17 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 - 📝 **Key Pattern**: tool_node acts as quality gate - checks `review_status` before executing PUBLISH_TOOLS
 - 📝 **Dual-Mode Agents**: ReviewerAgent handles both pre-publish drafts AND post-publish reviews
 - 📝 **Supervisor Context**: Adding state context to supervisor prompt improves routing accuracy
+
+### Phase 2 Learnings
+- ✅ **Conversation Persistence**: SQLite-backed memory enables session resumption across restarts
+- ✅ **Entity Tracking**: Structured extraction of pages/spaces from tool results enables "it"/"that page" resolution
+- ✅ **Coreference Resolution**: Simple rule-based patterns (it → last_page) solve 90% of cases
+- ✅ **Chain of Thought**: Explicit reasoning logs make agent decisions transparent and debuggable
+- ✅ **Confidence Scoring**: Rule-based routing (0.6-1.0) balances speed (no LLM call) with accuracy
+- ✅ **Hybrid Context**: Full message history + entity summary provides safety + future optimization path
+- 📝 **Key Pattern**: Entity extraction in tool_node captures structured data automatically from tool results
+- 📝 **Serialization**: LangChain messages require careful JSON serialization (tool_calls, tool_call_id preservation)
+- 📝 **State Explosion**: Each new feature adds fields to AgentState - need discipline to avoid bloat
 
 ### Framework Comparison Notes
 - **LangGraph**: ✅ Phase 1 Complete
