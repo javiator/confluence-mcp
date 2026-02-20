@@ -1,51 +1,434 @@
-# Phase 2: Intelligence & Memory — Plan
+# Phase 2: Intelligence & Memory — Comprehensive Plan
 
-> **Goal**: Give the agent system memory that persists across sessions and intelligence that understands conversational context
+> **Vision**: Transform stateless agents into intelligent assistants with memory, reasoning, and adaptive behavior
 
 **Branch**: `claude/phase-2-ceArC`
-**Estimated Duration**: 1 week
+**Estimated Duration**: 1 week (MVP), extensible beyond
 **Prerequisite**: Phase 1 Complete ✅
 
 ---
 
-## 🧠 What This Phase Is About
+## 🎯 What "Intelligence & Memory" Really Means
 
-Phase 1 agents are **stateless** — every new conversation starts with a blank slate.
+This isn't just about saving conversation history. It's about creating agents that:
 
-```
-Session A:  User: "Update the API docs page (ID: 12345)"
-            Agent: ✅ updates page 12345
-
-Session B:  User: "Update that page again"
-            Agent: ❌ "Which page? I don't know what you mean."
-```
-
-Phase 2 fixes this with two capabilities:
-
-1. **Memory** — agents remember past interactions, pages worked on, user preferences
-2. **Intelligence** — agents understand context clues like "that page", "it", "the same space"
+1. **Remember** context across conversations
+2. **Understand** implicit references and relationships
+3. **Learn** from interactions and feedback
+4. **Reason** through multi-step problems
+5. **Adapt** their behavior based on experience
+6. **Self-correct** when they make mistakes
+7. **Explain** their thinking process
 
 ---
 
-## 📦 Phase 2 Breakdown
+## 🧠 The Full Vision: Memory Systems
 
-### Phase 2.1 — Conversation Memory (days 1–3)
+### 1. **Conversational Memory** (Short-term)
+What the agent remembers **within** a session.
 
-**Goal**: Persist conversations across restarts. Pick up where you left off.
+| Type | What It Stores | Example |
+|------|---------------|---------|
+| **Working Memory** | Current task context, active entities | "We're updating the deployment runbook (ID: 12345)" |
+| **Turn-by-turn History** | Message sequence in current conversation | All `messages` in AgentState |
+| **Tool Call History** | What tools were called and their results | "Just searched for 'API docs' and found 3 pages" |
 
-#### What We Build
+### 2. **Episodic Memory** (Long-term)
+What the agent remembers **between** sessions — specific events.
 
-A `MemoryStore` backed by SQLite that saves/loads the `messages` list between sessions.
+| Type | What It Stores | Example |
+|------|---------------|---------|
+| **Session History** | Past conversations with timestamps | "Last Tuesday you updated the API documentation page" |
+| **Action Log** | Pages created/updated by user | "You've worked on 15 pages in the ENG space this month" |
+| **Error History** | What went wrong in the past | "Last time we tried updating page X, it failed due to permissions" |
 
-**Concept**:
+### 3. **Semantic Memory** (Long-term)
+What the agent **knows** — learned facts and patterns.
+
+| Type | What It Stores | Example |
+|------|---------------|---------|
+| **Space Knowledge** | What each space is for | "ENG = internal engineering docs, MKT = marketing content" |
+| **Page Relationships** | Hierarchies and links | "The API docs page has 5 child pages about different endpoints" |
+| **User Patterns** | Behavioral patterns | "User typically creates pages under parent 12345 in ENG space" |
+| **Tool Effectiveness** | Which tools work best when | "search_confluence works better with CQL queries, not natural language" |
+
+### 4. **Procedural Memory** (Long-term)
+What the agent **knows how to do** — learned skills.
+
+| Type | What It Stores | Example |
+|------|---------------|---------|
+| **Successful Workflows** | Multi-step patterns that worked | "When creating runbooks: 1) search for template, 2) copy structure, 3) customize" |
+| **Error Recovery** | How to fix common failures | "If search returns 0 results, try broader query or search in parent space" |
+
+---
+
+## 🎓 The Full Vision: Intelligence Systems
+
+### 1. **Context Understanding**
+
+| Capability | What It Does | Example |
+|-----------|-------------|---------|
+| **Entity Resolution** | Resolve "it", "that page", "there" to actual IDs | "Update it" → "Update page 12345" |
+| **Coreference Resolution** | Track what pronouns refer to | "The runbook needs updating. It's missing steps" → "it" = runbook |
+| **Temporal Reasoning** | Understand "yesterday", "last week", "the most recent one" | "Show me the page we worked on yesterday" |
+| **Spatial Reasoning** | Understand hierarchy and containment | "Create it under the same parent" |
+
+### 2. **Advanced Reasoning**
+
+| Capability | What It Does | Example |
+|-----------|-------------|---------|
+| **Chain of Thought (CoT)** | Step-by-step reasoning made visible | "To update the page, I need to: 1) fetch current content, 2) merge changes, 3) review" |
+| **Multi-step Planning** | Break complex tasks into subtasks | "To create a full runbook: create main page, add sections, create child pages for each step" |
+| **Causal Reasoning** | Understand cause and effect | "That update failed because the page isn't labeled ai-managed" |
+| **Counterfactual Reasoning** | Consider alternatives | "If I had searched in the parent space first, I would have found it faster" |
+
+### 3. **Self-Awareness & Meta-Cognition**
+
+| Capability | What It Does | Example |
+|-----------|-------------|---------|
+| **Confidence Scoring** | Express uncertainty | "I'm 80% confident this is the right page, but there's another similar one" |
+| **Self-Reflection** | Evaluate own performance | "That summary was too verbose. The user prefers concise answers." |
+| **Clarification** | Ask questions when uncertain | "You said 'update the docs' — do you mean the API docs or deployment docs?" |
+| **Explain Reasoning** | Show why a decision was made | "I routed to SearchAgent because you used the word 'find'" |
+
+### 4. **Adaptive Behavior**
+
+| Capability | What It Does | Example |
+|-----------|-------------|---------|
+| **Feedback Learning** | Adjust based on corrections | User: "Too long" → Next summary is shorter |
+| **Preference Inference** | Learn implicit preferences | "User always creates pages in ENG space → default to ENG" |
+| **Error Recovery** | Try alternatives when blocked | "Search failed → try broader query → try parent space → ask user" |
+| **Tool Selection Optimization** | Learn which tools work best | "For hierarchy queries, get_confluence_children works better than search_confluence" |
+
+### 5. **Proactive Intelligence**
+
+| Capability | What It Does | Example |
+|-----------|-------------|---------|
+| **Anticipate Needs** | Suggest next steps | "You created a runbook. Would you like me to create child pages for each step?" |
+| **Detect Patterns** | Notice repeated tasks | "You've updated this page 3 times this week. Should I watch it for changes?" |
+| **Anomaly Detection** | Flag unusual situations | "This page hasn't been updated in 6 months but you usually update it monthly" |
+
+---
+
+## 📊 Priority Tiers: What to Build When
+
+### **P0 (MVP — Week 1)** — Core Memory & Context
+
+| Feature | Component | Why MVP |
+|---------|-----------|---------|
+| ✅ Conversation persistence | SQLite MemoryStore | Can't be intelligent without memory |
+| ✅ Entity tracking (pages, spaces) | `known_entities` in AgentState | Solves "it"/"that page" problem immediately |
+| ✅ Coreference resolution | Entity context injection | Enables natural conversation |
+| ✅ Session resume | Chainlit UI + DB integration | User-facing value, easy to demo |
+
+### **P1 (Should Have — Week 2)** — Intelligent Context
+
+| Feature | Component | Why Important |
+|---------|-----------|--------------|
+| 🔲 User preferences | JSON preference store | Personalization, learned behavior |
+| 🔲 Chain of Thought | Reasoning trace in state | Transparency, debuggability |
+| 🔲 Confidence scoring | Supervisor confidence field | Better UX for ambiguous cases |
+| 🔲 Clarification flow | New `clarification` agent/node | Handle ambiguity gracefully |
+| 🔲 Tool call history tracking | `tool_history` in state | Learn what works/fails |
+
+### **P2 (Nice to Have — Future Phases)** — Advanced Intelligence
+
+| Feature | Component | When to Build |
+|---------|-----------|--------------|
+| 🔲 Semantic search over history | Vector embeddings (ChromaDB) | Phase 8 (Advanced Features) |
+| 🔲 Multi-step planning | Task decomposition layer | Phase 7 (Production Build) |
+| 🔲 Feedback learning | Reinforcement from corrections | Phase 8 |
+| 🔲 Proactive suggestions | Anticipation engine | Phase 8 |
+| 🔲 Space/page knowledge graph | Neo4j or in-memory graph | Phase 8 |
+
+---
+
+## 🏗️ Phase 2 Implementation Plan (1 Week MVP)
+
+### **Day 1-2: Conversation Memory (P0)**
+
+**Files**:
+- `src/confluence_mcp/agent/memory.py` — SQLite-backed storage
+- `src/confluence_mcp/agent/app.py` — Session management
+
+**New AgentState fields**:
+```python
+class AgentState(TypedDict):
+    # ... existing ...
+    session_id: str                    # Unique conversation ID
+    session_metadata: dict             # Created timestamp, user info
 ```
-Session A ends → messages saved to SQLite (session_id → messages)
-Session B starts → messages loaded from SQLite → agent has full history
+
+**Features**:
+- [ ] Create `MemoryStore` class with save/load/list/delete
+- [ ] Serialize LangChain messages to JSON (handle AIMessage, ToolMessage, etc.)
+- [ ] Store in SQLite: `sessions` table (id, messages_json, created_at, updated_at)
+- [ ] Integrate with Chainlit: load on start, save on message
+- [ ] UI: show "Resuming from [date]" banner
+
+**Tests**: 4 tests (save/load round-trip, empty session, list, delete)
+
+---
+
+### **Day 3-4: Entity Tracking & Resolution (P0)**
+
+**Files**:
+- `src/confluence_mcp/agent/graph.py` — State updates, context injection
+- `src/confluence_mcp/agent/entities.py` (NEW) — Entity extraction utilities
+
+**New AgentState fields**:
+```python
+class AgentState(TypedDict):
+    # ... existing ...
+    known_entities: dict  # {"pages": [...], "spaces": [...], "last_page": {...}, "last_space": "..."}
 ```
 
-#### Changes to `AgentState`
+**Entity structure**:
+```python
+{
+    "pages": [
+        {"id": "12345", "title": "API Docs", "space": "ENG", "url": "...", "last_mentioned": timestamp},
+        {"id": "67890", "title": "Deploy Guide", "space": "OPS", "url": "...", "last_mentioned": timestamp}
+    ],
+    "spaces": ["ENG", "OPS", "MKT"],
+    "last_page": {"id": "12345", "title": "API Docs", "space": "ENG"},
+    "last_space": "ENG"
+}
+```
+
+**Features**:
+- [ ] Extract entities from tool call results (SearchAgent, WriterAgent)
+- [ ] Update `known_entities` after every search/fetch/create/update
+- [ ] Inject entity context into Supervisor prompt
+- [ ] Inject entity context into WriterAgent prompt
+- [ ] Handle recency (keep 10 most recent pages, sorted by `last_mentioned`)
+- [ ] Coreference: "it" → `last_page`, "that space" → `last_space`, "the page" → `last_page`
+
+**Tests**: 5 tests (entity extraction, context injection, recency, coreference resolution, structure validation)
+
+---
+
+### **Day 5-6: Chain of Thought + Confidence (P1)**
+
+**Files**:
+- `src/confluence_mcp/agent/graph.py` — Add reasoning trace + confidence
+
+**New AgentState fields**:
+```python
+class AgentState(TypedDict):
+    # ... existing ...
+    reasoning_trace: list[str]         # ["Step 1: Search for page", "Step 2: Found 3 results", ...]
+    supervisor_confidence: float       # 0.0 - 1.0 confidence in routing decision
+```
+
+**Features**:
+- [ ] Supervisor logs reasoning before routing ("User said 'find' → route to search")
+- [ ] Each agent logs reasoning steps as they work
+- [ ] Supervisor outputs confidence score with routing decision
+- [ ] If confidence < 0.6 → route to clarification agent (future) OR ask user
+- [ ] Chainlit UI: show reasoning trace in expandable details
+
+**Tests**: 3 tests (reasoning trace populated, confidence in valid range, low confidence triggers clarification)
+
+---
+
+### **Day 7: User Preferences + Polish (P1)**
+
+**Files**:
+- `src/confluence_mcp/agent/preferences.py` (NEW) — JSON preference store
+
+**Preference structure**:
+```json
+{
+  "preferred_space": "ENG",
+  "preferred_parent_page": "12345",
+  "format_style": "concise",  // "concise" | "detailed"
+  "tone": "technical",         // "technical" | "friendly" | "formal"
+  "auto_review": true          // always review before publish
+}
+```
+
+**Features**:
+- [ ] `UserPreferences` class: load/save/update
+- [ ] Explicit preference capture: "always use ENG space" → update preferences
+- [ ] Implicit preference inference: if user creates 5 pages in ENG, suggest making it default
+- [ ] Inject preferences into all agent prompts as context
+- [ ] UI: `/prefs` command to view/edit preferences
+
+**Tests**: 3 tests (load defaults, save/load, context injection)
+
+**Polish**:
+- [ ] Update all Phase 1 tests to pass with new state fields
+- [ ] Write comprehensive `docs/PHASE2_SUMMARY.md`
+- [ ] Update `PHASE_TRACKER.md`
+
+---
+
+## 🗂️ Complete File Structure (Phase 2)
+
+```
+src/confluence_mcp/agent/
+├── graph.py          # AgentState with new fields, context injection
+├── app.py            # Session management, memory integration
+├── memory.py         # NEW: SQLite MemoryStore
+├── entities.py       # NEW: Entity extraction and resolution utilities
+├── preferences.py    # NEW: JSON-backed UserPreferences
+├── client.py         # Unchanged
+└── llm.py            # Unchanged
+
+tests/
+├── test_phase0.py    # 3 tests (unchanged)
+├── test_phase1.py    # 16 tests (updated for new state fields)
+├── test_phase2.py    # NEW: 15 tests (memory, entities, CoT, preferences)
+
+~/.confluence_mcp/    # User data directory
+├── memory.db         # SQLite: sessions table
+└── preferences.json  # User preferences
+
+docs/
+├── PHASE0_NOTES.md
+├── PHASE1_SUMMARY.md
+├── PHASE2_PLAN.md    # This file
+└── PHASE2_SUMMARY.md # Created at end of Phase 2
+```
+
+---
+
+## 🧪 Test Plan (15 tests total)
+
+### Memory Tests (4)
+1. `test_memory_store_save_and_load` — Round-trip serialization
+2. `test_memory_store_empty_session` — Non-existent session returns []
+3. `test_memory_store_list_sessions` — Metadata correct
+4. `test_memory_session_resume_in_app` — Integration test with Chainlit
+
+### Entity Tests (5)
+5. `test_entity_extraction_from_search` — SearchAgent extracts page entities
+6. `test_entity_context_injection_supervisor` — Supervisor sees entity context
+7. `test_entity_recency_ordering` — Most recent entities kept
+8. `test_coreference_resolution` — "it" resolves to last_page
+9. `test_known_entities_structure` — Schema validation
+
+### Reasoning Tests (3)
+10. `test_reasoning_trace_populated` — Supervisor logs reasoning
+11. `test_confidence_score_valid_range` — Confidence between 0-1
+12. `test_low_confidence_triggers_clarification` — <0.6 → ask user
+
+### Preferences Tests (3)
+13. `test_preferences_load_defaults` — Empty file → defaults
+14. `test_preferences_save_and_load` — Round-trip
+15. `test_preferences_injected_into_prompts` — Context includes prefs
+
+---
+
+## 📊 Success Criteria
+
+| Capability | How to Verify | Priority |
+|-----------|--------------|----------|
+| **Conversation persists** | Stop app, restart, history loads | P0 ✅ |
+| **"Update it" resolves** | Search page → say "update it" → works without clarification | P0 ✅ |
+| **Entity tracking works** | Mention 3 pages, then say "the first one" → resolves correctly | P0 ✅ |
+| **Reasoning visible** | Chainlit shows "Step 1: ..., Step 2: ..." | P1 |
+| **Confidence shown** | Supervisor shows "(80% confident)" when routing | P1 |
+| **Preferences persist** | Set pref, restart app, pref still active | P1 |
+| **All 31 tests pass** | `pytest tests/ -v` (Phase 0: 3, Phase 1: 16, Phase 2: 15) | P0 ✅ |
+
+---
+
+## 🎓 Learning Outcomes
+
+By the end of Phase 2, you'll understand:
+
+| Concept | What You'll Learn | Where |
+|---------|------------------|-------|
+| **Serialization** | Converting Python objects ↔ JSON for storage | `memory.py` |
+| **State management** | How context flows through a stateful graph | `AgentState` evolution |
+| **Entity resolution** | NLP technique for pronoun/reference resolution | `entities.py` |
+| **Persistence patterns** | SQLite for structured data, JSON for config | `memory.py`, `preferences.py` |
+| **Context injection** | Augmenting LLM prompts with dynamic data | Supervisor/agent prompts |
+| **Chain of Thought** | Making LLM reasoning explicit and traceable | `reasoning_trace` |
+| **Confidence calibration** | How to express and use uncertainty | `supervisor_confidence` |
+| **Personalization** | Adapting system behavior to user preferences | `preferences.py` |
+
+---
+
+## 🚀 Beyond Phase 2: Future Intelligence Features
+
+These are **not in scope** for Phase 2 but are the natural next steps:
+
+### **Phase 8: Advanced Intelligence**
+- **Semantic memory search**: Vector embeddings (ChromaDB/Pinecone) for "find conversations about deployments"
+- **Multi-step planning**: Decompose "create a complete runbook" into 10 subtasks
+- **Feedback learning**: "That was too long" → adjust `format_style` preference automatically
+- **Tool effectiveness learning**: Track which tools succeed/fail, optimize selection
+- **Proactive suggestions**: "You usually create child pages after runbooks. Want me to do that?"
+- **Knowledge graph**: Neo4j graph of spaces, pages, relationships for complex queries
+
+### **Phase 9: Meta-Learning**
+- **Self-improvement**: Agent analyzes own performance and proposes workflow improvements
+- **Transfer learning**: Apply patterns from one space to another
+- **Collaborative learning**: Multiple users' patterns aggregated (with privacy)
+
+---
+
+## 💡 Design Philosophy
+
+### **Start Simple, Grow Smart**
+
+1. **Week 1 (Phase 2 MVP)**: Basic memory + entity tracking
+   - Solves 80% of UX problems
+   - Minimal complexity
+   - Easy to test and debug
+
+2. **Week 4+ (Phase 8)**: Advanced intelligence
+   - Vector search, planning, learning
+   - Builds on solid foundation
+   - Each feature adds incremental value
+
+### **Explicit Over Implicit (For Now)**
+
+- **Preferences**: Explicit capture ("always use ENG") before implicit inference
+- **Coreference**: Simple recency rules ("it" = last_page) before complex NLP
+- **Confidence**: Rule-based scoring before ML calibration
+
+**Why**: Simpler systems are easier to debug, explain, and trust. Add complexity when simple solutions fail.
+
+### **Visible Intelligence**
+
+Every intelligence feature should have **UI visibility**:
+- Reasoning trace → expandable log in Chainlit
+- Confidence → shown as percentage
+- Entity resolution → "Resolved 'it' → API Docs (12345)"
+- Preferences → `/prefs` command to view
+
+**Why**: Users trust systems they can understand and control.
+
+---
+
+## 🔗 Integration Points
+
+### **With Phase 1**
+- Entity tracking enhances Supervisor routing (more context = better decisions)
+- Memory provides history for ReviewerAgent ("you updated this page yesterday")
+- Preferences reduce back-and-forth (default space/parent already known)
+
+### **With Phase 3+ (Future)**
+- CrewAI/Bedrock/Vertex: All frameworks benefit from memory/entity tracking
+- Comparison: Does multi-agent framework X handle state better than LangGraph?
+
+### **With Phase 7 (Production)**
+- Memory DB scales to handle thousands of sessions
+- Preferences become team-shared (not just per-user)
+- Entity graph persists across users (shared knowledge base)
+
+---
+
+## ⚙️ Implementation Notes
+
+### **AgentState Evolution**
 
 ```python
+# Phase 1 (before):
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     next: str
@@ -54,261 +437,37 @@ class AgentState(TypedDict):
     review_status: Optional[str]
     revision_count: int
 
-    # NEW in Phase 2.1
-    session_id: str           # unique ID per conversation thread
-```
-
-#### New File: `src/confluence_mcp/agent/memory.py`
-
-```python
-class MemoryStore:
-    """SQLite-backed conversation persistence."""
-
-    def save_session(self, session_id: str, messages: list) -> None:
-        """Serialize and save messages to DB."""
-
-    def load_session(self, session_id: str) -> list:
-        """Load messages for a session. Returns [] if not found."""
-
-    def list_sessions(self) -> list[dict]:
-        """Return summary of all saved sessions (id, last_active, message_count)."""
-
-    def delete_session(self, session_id: str) -> None:
-        """Delete a session from DB."""
-```
-
-**Storage location**: `~/.confluence_mcp/memory.db` (user's home dir, persists across runs)
-
-#### Chainlit Integration (`app.py`)
-
-- On chat start: generate/assign `session_id`, load history from `MemoryStore`
-- On chat end / message send: save updated messages to `MemoryStore`
-- UI: show "Resuming session from [date]" banner if history was found
-
-#### Learning Goal
-> Understand **serialization**: LangChain `BaseMessage` objects must be converted to plain dicts (JSON) for storage, then deserialized back. This teaches you about object lifecycles and persistence patterns.
-
----
-
-### Phase 2.2 — Entity Tracking & Resolution (days 3–5)
-
-**Goal**: Agents understand "that page", "it", "the same space" by tracking entities mentioned in conversation.
-
-#### The Problem
-
-```
-User: "Find the deployment runbook"
-Agent: Found it — "Deployment Runbook" (ID: 98765, Space: ENG)
-
-User: "Now update it to add a new step"
-Agent: ❌ Calls update_confluence_page_full with no page ID — it forgot!
-```
-
-#### The Solution — Entity Context in State
-
-```python
+# Phase 2 (after):
 class AgentState(TypedDict):
-    # ... existing fields ...
+    # Phase 1 fields (unchanged)
+    messages: Annotated[list[BaseMessage], add_messages]
+    next: str
+    active_agent: str
+    pending_tool_call: Optional[dict]
+    review_status: Optional[str]
+    revision_count: int
 
-    # NEW in Phase 2.2
-    known_entities: dict   # {"last_page": {"id": "98765", "title": "...", "space": "ENG"},
-                           #  "last_space": "ENG",
-                           #  "pages": [{"id": ..., "title": ..., "space": ...}]}
+    # Phase 2 additions
+    session_id: str                    # P0: Conversation persistence
+    session_metadata: dict             # P0: Created/updated timestamps
+    known_entities: dict               # P0: Pages, spaces, last_page, last_space
+    reasoning_trace: list[str]         # P1: Step-by-step reasoning log
+    supervisor_confidence: float       # P1: Routing confidence 0.0-1.0
+    tool_history: list[dict]           # P1: Log of tool calls + results (for learning)
 ```
 
-#### How It Works
+### **Backward Compatibility**
 
-**Step 1 — SearchAgent extracts entities**:
-After every search/fetch, `SearchAgent` writes the found page(s) into `known_entities`.
-
+All new fields have defaults so Phase 1 code continues to work:
 ```python
-# After search_confluence or get_confluence_page returns results:
-updates["known_entities"] = {
-    "last_page": {"id": "98765", "title": "Deployment Runbook", "space": "ENG"},
-    "last_space": "ENG",
-    "pages": [...]   # rolling list of recent pages
-}
+session_id: str = ""               # Empty string if not set
+known_entities: dict = {}          # Empty dict if not set
+reasoning_trace: list[str] = []    # Empty list if not set
 ```
-
-**Step 2 — Supervisor injects entity context into routing prompt**:
-
-```python
-# In supervisor_node:
-if state.get("known_entities"):
-    ents = state["known_entities"]
-    if ents.get("last_page"):
-        p = ents["last_page"]
-        context_msg += f"\n[Context: Last page worked on: '{p['title']}' (ID: {p['id']}, Space: {p['space']})]"
-```
-
-**Step 3 — WriterAgent uses entity context**:
-
-The WriterAgent's system prompt receives entity context, so "update it" correctly resolves to the last page ID.
-
-#### Example Flow After Phase 2.2
-
-```
-User: "Find the deployment runbook"
-→ SearchAgent finds page (ID: 98765)
-→ Saves to known_entities.last_page
-
-User: "Now update it to add a rollback step"
-→ Supervisor sees: [Context: Last page: 'Deployment Runbook' (ID: 98765)]
-→ Routes to WriterAgent with entity context
-→ WriterAgent correctly updates page 98765 ✅
-```
-
-#### Learning Goal
-> Understand **context propagation**: how information flows through a stateful graph. The `known_entities` dict is like a shared whiteboard — agents read and write to it as they work.
-
----
-
-### Phase 2.3 — User Preferences (days 5–7)
-
-**Goal**: Remember simple user preferences so the agent adapts over time.
-
-#### What Gets Remembered
-
-```json
-{
-  "preferred_space": "ENG",
-  "preferred_format": "detailed",
-  "default_parent_page": "12345",
-  "tone": "technical"
-}
-```
-
-#### How It Works
-
-- Preferences stored in `~/.confluence_mcp/preferences.json` (simple JSON file)
-- Loaded at startup, injected into agent prompts as context
-- Updated when user explicitly states preferences ("always use the ENG space", "keep it brief")
-
-#### New File: `src/confluence_mcp/agent/preferences.py`
-
-```python
-class UserPreferences:
-    def load(self) -> dict: ...
-    def save(self, prefs: dict) -> None: ...
-    def update(self, key: str, value: str) -> None: ...
-```
-
-#### Supervisor Integration
-
-```python
-# Preferences injected as context for supervisor:
-if prefs.get("preferred_space"):
-    context_msg += f"\n[User prefers Space: {prefs['preferred_space']}]"
-```
-
-#### Learning Goal
-> Understand **personalization**: how a generic agent becomes user-specific. Preferences are the simplest form of long-term learning — no ML needed, just remembering explicit user statements.
-
----
-
-## 🗂️ File Changes Summary
-
-```
-src/confluence_mcp/agent/
-├── graph.py          # Update AgentState, inject entity context + preferences into prompts
-├── app.py            # Session ID management, load/save memory on start/end
-├── memory.py         # NEW: SQLite-backed MemoryStore
-├── preferences.py    # NEW: JSON-backed UserPreferences
-├── client.py         # Unchanged
-└── llm.py            # Unchanged
-
-tests/
-├── test_phase2.py    # NEW: Phase 2 tests
-└── ...               # Existing tests unchanged
-
-~/.confluence_mcp/    # NEW: user data directory
-├── memory.db         # Conversation history (SQLite)
-└── preferences.json  # User preferences (JSON)
-```
-
----
-
-## 🧪 Tests (`tests/test_phase2.py`)
-
-### Memory Tests
-1. `test_memory_store_save_and_load` — save messages, load them back, verify content
-2. `test_memory_store_empty_session` — load non-existent session returns `[]`
-3. `test_memory_store_list_sessions` — list sessions returns correct metadata
-4. `test_memory_store_delete_session` — delete removes session from DB
-
-### Entity Tracking Tests
-5. `test_agent_state_has_known_entities` — `known_entities` in AgentState schema
-6. `test_entity_context_in_supervisor_prompt` — entity info injected into supervisor context
-7. `test_known_entities_structure` — validates expected shape (`last_page`, `last_space`, `pages`)
-
-### User Preferences Tests
-8. `test_preferences_load_defaults` — returns empty/default prefs when no file exists
-9. `test_preferences_save_and_load` — save a pref, reload it, verify round-trip
-10. `test_preferences_injected_into_context` — preferences appear in agent context
-
----
-
-## 📊 Success Criteria
-
-| Criteria | How to Verify |
-|----------|--------------|
-| Conversation persists across restarts | Stop app, restart, messages are still there |
-| "Update it" resolves correctly | Search a page, then say "update it" — no clarification needed |
-| Preferred space remembered | Say "always use ENG space", then create a page — ENG used automatically |
-| All Phase 2 tests pass | `pytest tests/test_phase2.py -v` |
-| Phase 1 tests still pass | `pytest tests/test_phase1.py -v` |
-
----
-
-## 🎓 Key Learning Concepts
-
-| Concept | Where You'll See It | Why It Matters |
-|---------|-------------------|----------------|
-| **Serialization** | `MemoryStore` — saving LangChain messages to SQLite | Real systems must persist data |
-| **State propagation** | `known_entities` flowing through graph nodes | How context travels in multi-agent systems |
-| **Context injection** | Supervisor prompt augmentation with entity/pref data | Making LLMs context-aware without fine-tuning |
-| **Separation of concerns** | `memory.py` + `preferences.py` separate from `graph.py` | Good software design: each file has one job |
-| **Stateful vs stateless** | Before (Phase 1) vs after (Phase 2) | Core architectural difference in agent design |
-
----
-
-## ⚡ Quick Start for Phase 2
-
-```bash
-# 1. Create and switch to Phase 2 branch
-git checkout -b claude/phase-2-ceArC
-
-# 2. Start with Phase 2.1 (memory)
-# Create src/confluence_mcp/agent/memory.py
-
-# 3. Write tests first (TDD approach)
-# Create tests/test_phase2.py with memory tests
-
-# 4. Implement until tests pass
-pytest tests/test_phase2.py -v
-
-# 5. Move to Phase 2.2 (entity tracking), repeat
-
-# 6. Move to Phase 2.3 (preferences), repeat
-
-# 7. Verify nothing broke
-pytest tests/ -v
-```
-
----
-
-## 💡 Design Decisions & Tradeoffs
-
-| Decision | Why |
-|---------|-----|
-| **SQLite over vector DB** | Simple, no extra service needed, sufficient for conversation history. Vector DBs are for semantic search (Phase 8+). |
-| **JSON file for preferences** | Human-readable, editable by hand, no DB overhead for small data |
-| **`known_entities` in AgentState** | Entities need to flow through the graph in-session; memory.db is for between sessions |
-| **Entity extraction in SearchAgent** | Search is the source of truth for page IDs — cleanest place to capture them |
-| **No ML for preference learning** | Explicit user statements are more reliable than inference for v1 |
 
 ---
 
 **Created**: 2026-02-20
-**Status**: 📋 Plan Ready — Awaiting Phase 2 Start
+**Revised**: 2026-02-20 (Comprehensive Vision)
+**Status**: 📋 Plan Ready — P0 MVP defined, P1/P2 roadmap clear
 **Branch**: `claude/phase-2-ceArC` (to be created)
