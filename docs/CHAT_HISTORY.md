@@ -27,9 +27,9 @@ Three ways to access your chat history:
    - Message count
 
 #### Option C: Direct Database Access
-The chat history is stored in:
-- **Chainlit UI:** `./chainlit_history.db` (Chainlit's native storage)
-- **Agent Memory:** `./confluence_memory.db` (Agent's internal memory)
+The chat history is stored in a single SQLite database:
+- **Database:** `./confluence_memory.db` (Agent's memory store)
+- **Schema:** See "Storage Schema" section below for details
 
 ### 3. **Resume Previous Conversations**
 When you resume a chat:
@@ -40,18 +40,16 @@ When you resume a chat:
 ## Configuration
 
 ### Database Location
-Edit `.chainlit/config.toml` to change the database path:
+The chat history is stored in `confluence_memory.db` at the project root by default.
 
-```toml
-[data]
-data_persistence = true
-database_url = "sqlite:///./chainlit_history.db"  # Change path here
+To change the database location, modify `src/confluence_mcp/agent/memory.py`:
+```python
+class MemoryStore:
+    def __init__(self, db_path: str = "./confluence_memory.db"):
+        # Change default path here
 ```
 
-For production environments, use PostgreSQL:
-```toml
-database_url = "postgresql://user:password@localhost/chainlit_db"
-```
+For production environments, you can extend `MemoryStore` to use PostgreSQL or other backends.
 
 ### Session Timeout
 Sessions are kept alive for 1 hour by default:
@@ -62,19 +60,19 @@ session_timeout = 3600  # seconds
 
 ## Architecture
 
-The system maintains two storage layers:
+The system uses a **single-database design** for efficiency:
 
-1. **Chainlit Data Layer** (`chainlit_history.db`)
-   - Stores UI-level thread metadata
-   - Enables the Chainlit sidebar history browser
-   - Managed by Chainlit framework
+**Agent Memory Store** (`confluence_memory.db`)
+- **Single source of truth** for all conversation data
+- Stores full conversation messages in LangChain format
+- Includes session metadata (model, timestamps, message count)
+- Managed by the `MemoryStore` class (`src/confluence_mcp/agent/memory.py`)
 
-2. **Agent Memory Store** (`confluence_memory.db`)
-   - Stores full conversation messages (LangChain format)
-   - Includes session metadata (model, timestamps, etc.)
-   - Managed by `MemoryStore` class
-
-Both layers are synchronized to ensure consistent history across UI and agent logic.
+**How Chainlit integration works:**
+- Chainlit's UI automatically tracks thread metadata (thread_id, creation time)
+- When you click a thread in the sidebar, Chainlit calls `@cl.on_chat_resume`
+- Our handler loads the full message history from `MemoryStore`
+- No data duplication - cleaner and more efficient!
 
 ## Usage Examples
 
@@ -135,14 +133,15 @@ CREATE TABLE sessions (
 - Sessions are created after the first message exchange
 
 ### Can't see history in sidebar
-- Ensure `data_persistence = true` in `.chainlit/config.toml`
-- Check that `chainlit_history.db` exists in project root
-- Restart the Chainlit server
+- Chainlit's sidebar shows threads automatically (no config needed)
+- If sidebar is hidden, click the ☰ menu icon to expand it
+- Ensure you've sent at least one message to create a thread
 
 ### Sessions not resuming correctly
-- Check for errors in terminal/logs
-- Verify both databases exist and are not corrupted
-- Try deleting databases and starting fresh (⚠️ loses all history)
+- Check terminal/logs for errors during `@cl.on_chat_resume`
+- Verify `confluence_memory.db` exists and is not corrupted
+- Try: `sqlite3 confluence_memory.db "SELECT COUNT(*) FROM sessions;"`
+- If database is corrupted, delete it and start fresh (⚠️ loses all history)
 
 ## Future Enhancements
 
