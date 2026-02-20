@@ -22,16 +22,14 @@ def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
     
     mcp_tools = {t.name: t for t in mcp_client.get_tools() if t.name in allowed_tools}
     
+    from crewai.tools import BaseTool
+
     for name, t in mcp_tools.items():
-        # A simple synchronous wrapper or async wrapper if CrewAI prefers
-        # CrewAI supports langchain BaseTool
-        
         # Determine schema from MCP inputSchema
         def create_sync_wrapper(tool_name=name):
             def sync_run(**kwargs):
                 # Note: This is a hacky way to run async code in sync context,
                 # but CrewAI agents usually run synchronously under the hood.
-                # If there's an active loop, use nest_asyncio or similar.
                 try:
                     loop = asyncio.get_running_loop()
                 except RuntimeError:
@@ -44,14 +42,26 @@ def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
                 return asyncio.run(mcp_client.call_tool(tool_name, kwargs))
             return sync_run
 
-        # Basic schema mapping (simplified for this implementation)
-        tool = StructuredTool.from_function(
-            func=create_sync_wrapper(name),
-            name=name,
-            description=t.description,
-            # We skip explicit args_schema here for simplicity, the LLM will use the argument names directly
-        )
-        crew_tools.append(tool)
+        # Determine the wrapper function for this tool
+        wrapper = create_sync_wrapper(name)
+
+        # CrewAI Agents in newer versions require tools to be either
+        # instances of BaseTool (from crewai.tools) or specific LangChain tools.
+        # We use a factory function to create a unique class per tool,
+        # which avoids closure/scoping issues and Pydantic validation errors.
+        from crewai.tools import BaseTool
+
+        def create_mcp_tool_instance(tool_name, tool_desc, run_func):
+            class MCPCustomTool(BaseTool):
+                name: str = tool_name
+                description: str = tool_desc
+                
+                def _run(self, **kwargs) -> Any:
+                    return run_func(**kwargs)
+            
+            return MCPCustomTool()
+
+        crew_tools.append(create_mcp_tool_instance(name, t.description, wrapper))
         
     return crew_tools
 
@@ -60,7 +70,20 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
     """
     Create a CrewAI orchestrator for Confluence
     """
-    llm = get_llm(provider, model)
+    # CrewAI (via LiteLLM) often works better with string model identifiers
+    if provider == "openai":
+        llm_identifier = model or "gpt-4o"
+    elif provider == "anthropic":
+        llm_identifier = f"anthropic/{model or 'claude-3-5-sonnet-20240620'}"
+    elif provider == "google":
+        # Ensure we use the correct LiteLLM prefix for Gemini
+        clean_model = model or "gemini-1.5-flash"
+        if clean_model.startswith("models/"):
+            clean_model = clean_model.replace("models/", "")
+        llm_identifier = f"gemini/{clean_model}"
+    else:
+        # Fallback to langchain object if unknown
+        llm_identifier = get_llm(provider, model)
     
     search_tools = create_crewai_tools(mcp_client, SEARCH_TOOLS)
     writer_tools = create_crewai_tools(mcp_client, WRITER_TOOLS)
@@ -72,7 +95,7 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         goal='Find the most relevant Confluence pages',
         backstory='Expert in information retrieval and CQL queries. Always provides page titles and URLs.',
         tools=search_tools,
-        llm=llm,
+        llm=llm_identifier,
         verbose=True
     )
 
@@ -81,7 +104,7 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         goal='Create clear, well-structured documentation',
         backstory='Senior technical writer skilled at XHTML formatting and merging updates securely.',
         tools=writer_tools,
-        llm=llm,
+        llm=llm_identifier,
         verbose=True
     )
 
@@ -90,7 +113,7 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         goal='Ensure documentation meets quality standards before publishing',
         backstory='Meticulous reviewer who catches structural, factual, and formatting issues. Does pre-publish QA.',
         tools=reviewer_tools,
-        llm=llm,
+        llm=llm_identifier,
         verbose=True
     )
 
