@@ -160,7 +160,19 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
         reasoning = ""
         confidence = 1.0  # Default high confidence
 
-        if state.get("pending_tool_call"):
+        # Check if an agent just responded with text (no tool calls) → task complete
+        last_msg = state["messages"][-1] if state["messages"] else None
+        agent_just_responded = (
+            isinstance(last_msg, AIMessage)
+            and not last_msg.tool_calls
+            and not state.get("pending_tool_call")
+            and not state.get("review_status")
+        )
+
+        if agent_just_responded:
+            reasoning = "Agent responded with text answer → task complete for this turn"
+            route_decision = "end"
+        elif state.get("pending_tool_call"):
             reasoning = "Draft pending → route to reviewer for quality check"
             route_decision = "reviewer"
         elif state.get("review_status") == "approved":
@@ -174,7 +186,7 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
             msg_lower = last_user_msg.lower()
 
             # Search intent keywords
-            if any(word in msg_lower for word in ["find", "search", "show", "get", "list", "what", "where"]):
+            if any(word in msg_lower for word in ["find", "search", "show", "get", "list", "what", "where", "again"]):
                 reasoning = f"User message contains search keywords ('{last_user_msg[:50]}...') → route to search"
                 route_decision = "search"
                 confidence = 0.9
@@ -185,8 +197,10 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                 route_decision = "writer"
                 confidence = 0.9
 
-            # Review intent keywords
-            elif any(word in msg_lower for word in ["review", "check", "quality", "verify"]):
+            # Review intent keywords (not "check again" which is a search retry)
+            elif any(word in msg_lower for word in ["review", "quality", "verify"]) or (
+                "check" in msg_lower and "again" not in msg_lower
+            ):
                 reasoning = f"User message contains review keywords → route to reviewer"
                 route_decision = "reviewer"
                 confidence = 0.85
