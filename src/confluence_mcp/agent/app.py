@@ -1,4 +1,6 @@
 import os
+import uuid
+from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -6,6 +8,7 @@ import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
 from confluence_mcp.agent.client import MCPClient
 from confluence_mcp.agent.graph import create_graph
+from confluence_mcp.agent.memory import MemoryStore
 
 AGENT_LABELS = {
     "search":   "🔍 Search Agent",
@@ -53,13 +56,34 @@ async def on_chat_start():
     # 2. Get User Settings (Model Selection)
     provider = os.environ.get("LLM_PROVIDER", "openai")
     model = os.environ.get("LLM_MODEL", "gpt-4o")
-    
+
     # 3. Initialize Graph
     graph = create_graph(mcp_client, provider, model)
     cl.user_session.set("graph", graph)
-    
+
     # Store provider/model info for later use (don't send message to avoid hiding starters)
     cl.user_session.set("llm_info", f"{provider}/{model}")
+
+    # 4. Phase 2: Initialize Memory & Session
+    memory_store = MemoryStore()
+    cl.user_session.set("memory_store", memory_store)
+
+    # Generate unique session ID for this conversation
+    session_id = str(uuid.uuid4())
+    cl.user_session.set("session_id", session_id)
+
+    # Try to resume from a previous session (for now, always start fresh)
+    # In the future, we can add UI to resume specific sessions
+    history = []
+    cl.user_session.set("history", history)
+
+    # Session metadata
+    session_metadata = {
+        "created_at": datetime.now().isoformat(),
+        "provider": provider,
+        "model": model,
+    }
+    cl.user_session.set("session_metadata", session_metadata)
 
 @cl.on_message
 async def on_message(message: cl.Message):
@@ -161,17 +185,39 @@ async def on_message(message: cl.Message):
     # But astream_events doesn't return the final state directly.
     # For simplicity in this stateless-ish UI, we just append the final AIMessage
     # A better way is to use a persistent Checkpointer in LangGraph, but that's advanced.
-    # We'll just rely on the graph returning the full list if we used ainvoke, 
+    # We'll just rely on the graph returning the full list if we used ainvoke,
     # but since we streamed, we need to reconstruct or just re-fetch.
-    
+
     # For now, let's just append the final response to our local history
     history.append(AIMessage(content=msg.content))
     cl.user_session.set("history", history)
-    
+
+    # Phase 2: Save conversation to memory after each exchange
+    memory_store = cl.user_session.get("memory_store")
+    session_id = cl.user_session.get("session_id")
+    if memory_store and session_id:
+        try:
+            memory_store.save_session(session_id, history)
+        except Exception as e:
+            # Don't fail the conversation if memory save fails, just log
+            print(f"Warning: Failed to save session to memory: {e}")
+
     await msg.update()
 
 @cl.on_chat_end
 async def on_chat_end():
+    # Phase 2: Save final conversation state to memory
+    memory_store = cl.user_session.get("memory_store")
+    session_id = cl.user_session.get("session_id")
+    history = cl.user_session.get("history", [])
+
+    if memory_store and session_id and history:
+        try:
+            memory_store.save_session(session_id, history)
+        except Exception as e:
+            print(f"Warning: Failed to save session on exit: {e}")
+
+    # Close MCP connection
     mcp_client = cl.user_session.get("mcp_client")
     if mcp_client:
         await mcp_client.close()

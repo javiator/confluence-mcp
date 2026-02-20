@@ -15,6 +15,10 @@ class AgentState(TypedDict):
     review_status: Optional[str]       # "approved" | "needs_revision" | None
     revision_count: int                # tracks review-revision cycles (safeguard against infinite loops)
 
+    # Phase 2: Memory & Intelligence
+    session_id: str                    # unique conversation ID for persistence
+    session_metadata: dict             # session creation time, user info, etc.
+
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 MAX_REVISION_ITERATIONS = 3  # Maximum review-revision cycles before auto-approval
