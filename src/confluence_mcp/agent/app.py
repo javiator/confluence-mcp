@@ -1,4 +1,5 @@
 import os
+import asyncio
 import uuid
 from datetime import datetime
 from dotenv import load_dotenv
@@ -215,14 +216,10 @@ async def on_message(message: cl.Message):
             )
             tasks = [search_task]
 
-        msg = cl.Message(content="")
-        await msg.send()
-
         def crew_step_callback(step_output):
             """Callback from CrewAI worker thread to update Chainlit UI"""
             try:
                 # step_output can be AgentAction or AgentFinish
-                # In newer CrewAI versions, it might be a different object structure
                 agent_name = getattr(step_output, 'agent', 'System')
                 tool_used = getattr(step_output, 'tool', 'Thinking...')
                 
@@ -232,7 +229,6 @@ async def on_message(message: cl.Message):
                     author="CrewAI"
                 ).send())
             except Exception:
-                # Avoid crashing the entire kickoff if the callback fails
                 pass
 
         active_crew = Crew(
@@ -246,9 +242,9 @@ async def on_message(message: cl.Message):
         # CrewAI execution is synchronous, so we run it in a thread to not block Chainlit UI
         result = await cl.make_async(active_crew.kickoff)()
 
-        # Final cleanup and display
-        msg.content = str(result.raw)
-        await msg.update()
+        # Final cleanup and display - Send a FRESH message so it's at the bottom
+        msg = cl.Message(content=str(result.raw), author="CrewAI Agent")
+        await msg.send()
         
         # Update history with the result
         history.append(AIMessage(content=msg.content))

@@ -25,7 +25,7 @@ dependencies = [
     "python-dotenv",
     "mcp",
     "google-generativeai",
-    "crewai>=1.9.3",
+    "crewai[google-genai]>=1.9.3",
     "litellm>=1.75.3",
 ]
 
