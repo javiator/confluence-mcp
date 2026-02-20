@@ -12,7 +12,7 @@ WRITER_TOOLS  = {"create_confluence_page", "prepare_confluence_page_merge_update
                  "update_confluence_page_full"}
 REVIEWER_TOOLS = {"get_confluence_page"}
 
-def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
+def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set, loop: asyncio.AbstractEventLoop = None):
     """
     Wrap MCP tools into LangChain StructuredTools which CrewAI can use.
     Since mcp_client.call_tool is async and CrewAI has partial async support, 
@@ -23,22 +23,22 @@ def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
     mcp_tools = {t.name: t for t in mcp_client.get_tools() if t.name in allowed_tools}
     
     from crewai.tools import BaseTool
-
+ 
     for name, t in mcp_tools.items():
         # Determine schema from MCP inputSchema
         def create_sync_wrapper(tool_name=name):
             def sync_run(**kwargs):
-                # Note: This is a hacky way to run async code in sync context,
-                # but CrewAI agents usually run synchronously under the hood.
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = None
-
+                # CrewAI kickoff runs in a separate thread via cl.make_async.
+                # The MCPClient session is bound to the main Chainlit loop.
+                # We must use run_coroutine_threadsafe to execute the tool call on the main loop.
                 if loop and loop.is_running():
-                    import nest_asyncio
-                    nest_asyncio.apply()
-                    return asyncio.run(mcp_client.call_tool(tool_name, kwargs))
+                    future = asyncio.run_coroutine_threadsafe(
+                        mcp_client.call_tool(tool_name, kwargs), 
+                        loop
+                    )
+                    return future.result()
+                
+                # Fallback for cases where loop isn't provided or running
                 return asyncio.run(mcp_client.call_tool(tool_name, kwargs))
             return sync_run
 
@@ -85,7 +85,7 @@ def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
     return crew_tools
 
 
-def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", model: str = None) -> Crew:
+def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", model: str = None, loop: asyncio.AbstractEventLoop = None) -> Crew:
     """
     Create a CrewAI orchestrator for Confluence
     """
@@ -104,9 +104,9 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         # Fallback to langchain object if unknown
         llm_identifier = get_llm(provider, model)
     
-    search_tools = create_crewai_tools(mcp_client, SEARCH_TOOLS)
-    writer_tools = create_crewai_tools(mcp_client, WRITER_TOOLS)
-    reviewer_tools = create_crewai_tools(mcp_client, REVIEWER_TOOLS)
+    search_tools = create_crewai_tools(mcp_client, SEARCH_TOOLS, loop=loop)
+    writer_tools = create_crewai_tools(mcp_client, WRITER_TOOLS, loop=loop)
+    reviewer_tools = create_crewai_tools(mcp_client, REVIEWER_TOOLS, loop=loop)
 
     # 1. Define Agents
     search_agent = Agent(

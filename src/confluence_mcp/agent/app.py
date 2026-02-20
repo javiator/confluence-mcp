@@ -157,6 +157,11 @@ async def on_message(message: cl.Message):
         await cl.Message(content=sessions_text).send()
         return
 
+    # Load history
+    history = cl.user_session.get("history", [])
+    history.append(HumanMessage(content=message.content))
+    cl.user_session.set("history", history)
+
     # ---------------------------------------------------------
     # Phase 3: CREWAI EXECUTION PATH
     # ---------------------------------------------------------
@@ -167,16 +172,21 @@ async def on_message(message: cl.Message):
         mcp_client = cl.user_session.get("mcp_client")
         provider = os.environ.get("LLM_PROVIDER", "openai")
         model = os.environ.get("LLM_MODEL", "gpt-4o")
+        
+        # Get the current event loop for thread-safe cross-loop communication
+        loop = asyncio.get_running_loop()
 
         # Re-instantiate agents from factory
-        crew_components = create_confluence_crew(mcp_client, provider, model)
+        crew_components = create_confluence_crew(mcp_client, provider, model, loop=loop)
         search_agent = crew_components["search_agent"]
         writer_agent = crew_components["writer_agent"]
         reviewer_agent = crew_components["reviewer_agent"]
 
-        msg = cl.Message(content="")
-        await msg.send()
-
+        # ---------------------------------------------------------
+        # Phase 3: CREWAI EXECUTION PATH WITH CALLBACKS
+        # ---------------------------------------------------------
+        from crewai import Crew, Process, Task
+        
         # Dynamic task mapping based on simple heuristics since CrewAI
         # needs explicit tasks. In production, a Router Agent would do this.
         user_input = message.content.lower()
@@ -205,35 +215,48 @@ async def on_message(message: cl.Message):
             )
             tasks = [search_task]
 
-        from crewai import Crew, Process
+        msg = cl.Message(content="")
+        await msg.send()
+
+        def crew_step_callback(step_output):
+            """Callback from CrewAI worker thread to update Chainlit UI"""
+            try:
+                # step_output can be AgentAction or AgentFinish
+                # In newer CrewAI versions, it might be a different object structure
+                agent_name = getattr(step_output, 'agent', 'System')
+                tool_used = getattr(step_output, 'tool', 'Thinking...')
+                
+                cl.run_sync(cl.Message(
+                    content=f"⚙️ **{agent_name}** is working...\n"
+                            f"Action: {tool_used}",
+                    author="CrewAI"
+                ).send())
+            except Exception:
+                # Avoid crashing the entire kickoff if the callback fails
+                pass
+
         active_crew = Crew(
             agents=[search_agent, writer_agent, reviewer_agent],
             tasks=tasks,
             process=Process.sequential,
-            verbose=True
+            verbose=True,
+            step_callback=crew_step_callback
         )
 
         # CrewAI execution is synchronous, so we run it in a thread to not block Chainlit UI
-        # We use cl.make_async to run sync code asynchronously
         result = await cl.make_async(active_crew.kickoff)()
 
-        await msg.stream_token(str(result.raw))
+        # Final cleanup and display
+        msg.content = str(result.raw)
+        await msg.update()
+        
+        # Update history with the result
+        history.append(AIMessage(content=msg.content))
+        cl.user_session.set("history", history)
         
     except Exception as e:
         await cl.Message(content=f"Error executing CrewAI: {str(e)}").send()
         return
-
-    # Update history with the result
-    # We need to fetch the final state to get the full history including tool messages
-    # But astream_events doesn't return the final state directly.
-    # For simplicity in this stateless-ish UI, we just append the final AIMessage
-    # A better way is to use a persistent Checkpointer in LangGraph, but that's advanced.
-    # We'll just rely on the graph returning the full list if we used ainvoke,
-    # but since we streamed, we need to reconstruct or just re-fetch.
-
-    # For now, let's just append the final response to our local history
-    history.append(AIMessage(content=msg.content))
-    cl.user_session.set("history", history)
 
     # Phase 2: Save conversation to memory after each exchange
     memory_store = cl.user_session.get("memory_store")
