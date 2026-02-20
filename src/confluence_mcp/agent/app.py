@@ -40,10 +40,15 @@ async def set_starters():
             message="Create a new page titled 'Meeting Notes' in space AR with some sample content",
             icon="/public/plus.svg",
         ),
+        cl.Starter(
+            label="📜 Browse Past Conversations",
+            message="/list_sessions",
+            icon="/public/file.svg",
+        ),
     ]
 
-@cl.on_chat_start
-async def on_chat_start():
+async def _initialize_session(resume_history=None):
+    """Common initialization logic for new and resumed chats."""
     # 1. Connect to MCP Server (Session Scoped)
     mcp_client = MCPClient()
     try:
@@ -51,7 +56,7 @@ async def on_chat_start():
         cl.user_session.set("mcp_client", mcp_client)
     except Exception as e:
         await cl.Message(content=f"Failed to connect to MCP Server: {e}").send()
-        return
+        return False
 
     # 2. Get User Settings (Model Selection)
     provider = os.environ.get("LLM_PROVIDER", "openai")
@@ -61,20 +66,20 @@ async def on_chat_start():
     graph = create_graph(mcp_client, provider, model)
     cl.user_session.set("graph", graph)
 
-    # Store provider/model info for later use (don't send message to avoid hiding starters)
+    # Store provider/model info for later use
     cl.user_session.set("llm_info", f"{provider}/{model}")
 
     # 4. Phase 2: Initialize Memory & Session
     memory_store = MemoryStore()
     cl.user_session.set("memory_store", memory_store)
 
-    # Generate unique session ID for this conversation
-    session_id = str(uuid.uuid4())
+    # Use thread_id from Chainlit for session tracking
+    thread_id = cl.context.session.thread_id
+    session_id = thread_id if thread_id else str(uuid.uuid4())
     cl.user_session.set("session_id", session_id)
 
-    # Try to resume from a previous session (for now, always start fresh)
-    # In the future, we can add UI to resume specific sessions
-    history = []
+    # Load history from resume or start fresh
+    history = resume_history if resume_history else []
     cl.user_session.set("history", history)
 
     # Session metadata
@@ -85,10 +90,75 @@ async def on_chat_start():
     }
     cl.user_session.set("session_metadata", session_metadata)
 
+    return True
+
+@cl.on_chat_start
+async def on_chat_start():
+    """Initialize a new chat session."""
+    success = await _initialize_session()
+    if not success:
+        return
+
+    # Show welcome message for new sessions only
+    llm_info = cl.user_session.get("llm_info")
+    if llm_info and not cl.context.session.thread_id:
+        # Only show for truly new sessions, not resumed ones
+        pass  # Could add welcome message here
+
+@cl.on_chat_resume
+async def on_chat_resume(thread: cl.ThreadDict):
+    """Resume a previous chat session."""
+    # Load conversation history from memory
+    memory_store = MemoryStore()
+    session_id = thread["id"]
+
+    # Try to load from our memory store
+    history = memory_store.load_session(session_id)
+
+    # Initialize with the loaded history
+    success = await _initialize_session(resume_history=history)
+    if not success:
+        return
+
+    # Show resume message
+    msg_count = len(history)
+    await cl.Message(
+        content=f"💬 Resumed conversation with {msg_count} previous messages",
+        author="System"
+    ).send()
+
 @cl.on_message
 async def on_message(message: cl.Message):
+    # Handle special commands
+    if message.content.strip() == "/list_sessions":
+        memory_store = cl.user_session.get("memory_store")
+        if not memory_store:
+            memory_store = MemoryStore()
+
+        sessions = memory_store.list_sessions()
+
+        if not sessions:
+            await cl.Message(content="📭 No previous conversations found.").send()
+            return
+
+        # Format the sessions list
+        sessions_text = "📜 **Your Past Conversations:**\n\n"
+        for i, session in enumerate(sessions[:10], 1):  # Show last 10
+            created = session["created_at"][:19].replace("T", " ")
+            updated = session["updated_at"][:19].replace("T", " ")
+            msg_count = session["message_count"]
+            sessions_text += f"{i}. **Session** `{session['id'][:8]}...`\n"
+            sessions_text += f"   - Created: {created}\n"
+            sessions_text += f"   - Last updated: {updated}\n"
+            sessions_text += f"   - Messages: {msg_count}\n\n"
+
+        sessions_text += "\n💡 **Tip:** In Chainlit, click the 🕐 history icon in the sidebar to browse and resume past conversations!"
+
+        await cl.Message(content=sessions_text).send()
+        return
+
     graph = cl.user_session.get("graph")
-    
+
     if not graph:
         # Fallback: try to re-initialize if missing (e.g. after reload)
         provider = os.environ.get("LLM_PROVIDER", "openai")

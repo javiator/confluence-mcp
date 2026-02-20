@@ -127,6 +127,7 @@ uv run chainlit run src/confluence_mcp/agent/app.py -w --host 0.0.0.0 --port 800
 - 📝 Create and update Confluence pages
 - 💬 Natural language interface
 - 🎯 Starter prompts for common tasks
+- 📜 **Multi-session chat history** - Resume previous conversations anytime (see [CHAT_HISTORY.md](docs/CHAT_HISTORY.md))
 
 ### Connecting to an MCP Client
 

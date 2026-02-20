@@ -117,5 +117,14 @@ hide_cot = false
         #light = "#FFE7EB"
 
 
+[data]
+# Enable data persistence for chat history
+# This allows users to browse and resume previous conversations
+data_persistence = true
+
+# SQLite database path for storing chat history
+# Change to PostgreSQL URI for production: "postgresql://user:pass@host/db"
+database_url = "sqlite:///./chainlit_history.db"
+
 [meta]
 generated_by = "1.0.0"
