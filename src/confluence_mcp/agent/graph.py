@@ -20,6 +20,8 @@ class AgentState(TypedDict):
     session_id: str                    # unique conversation ID for persistence
     session_metadata: dict             # session creation time, user info, etc.
     known_entities: dict               # tracked pages/spaces for coreference resolution
+    reasoning_trace: list              # step-by-step reasoning log for transparency
+    supervisor_confidence: float       # 0.0-1.0 confidence in routing decision
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -135,6 +137,7 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
         # Enhanced context: include pending state info
         context_msg = ""
         revision_count = state.get("revision_count", 0)
+        reasoning_trace = state.get("reasoning_trace", []).copy()
 
         if state.get("pending_tool_call"):
             context_msg = "\n[Context: Writer has drafted content, awaiting review]"
@@ -150,19 +153,70 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
             if entity_context:
                 context_msg += "\n\n" + entity_context
 
-        response = await llm.ainvoke(
-            [SystemMessage(content=SUPERVISOR_PROMPT + context_msg)] + state["messages"]
-        )
-        route = response.content.strip().lower().split()[0]
-        if route not in {"search", "writer", "reviewer"}:
-            route = "end"
-        return {"next": route}
+        # Phase 2.3: Chain of Thought - Log reasoning before routing
+        last_user_msg = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
+
+        # Simple rule-based reasoning (in production, this could come from LLM)
+        reasoning = ""
+        confidence = 1.0  # Default high confidence
+
+        if state.get("pending_tool_call"):
+            reasoning = "Draft pending → route to reviewer for quality check"
+            route_decision = "reviewer"
+        elif state.get("review_status") == "approved":
+            reasoning = "Review approved → route back to writer to publish"
+            route_decision = "writer"
+        elif state.get("review_status") == "needs_revision":
+            reasoning = f"Revision requested (iteration {revision_count}) → route to writer to fix"
+            route_decision = "writer"
+        else:
+            # Analyze user intent from message
+            msg_lower = last_user_msg.lower()
+
+            # Search intent keywords
+            if any(word in msg_lower for word in ["find", "search", "show", "get", "list", "what", "where"]):
+                reasoning = f"User message contains search keywords ('{last_user_msg[:50]}...') → route to search"
+                route_decision = "search"
+                confidence = 0.9
+
+            # Write intent keywords
+            elif any(word in msg_lower for word in ["create", "update", "add", "change", "modify", "write"]):
+                reasoning = f"User message contains write keywords ('{last_user_msg[:50]}...') → route to writer"
+                route_decision = "writer"
+                confidence = 0.9
+
+            # Review intent keywords
+            elif any(word in msg_lower for word in ["review", "check", "quality", "verify"]):
+                reasoning = f"User message contains review keywords → route to reviewer"
+                route_decision = "reviewer"
+                confidence = 0.85
+
+            # Low confidence - let LLM decide
+            else:
+                response = await llm.ainvoke(
+                    [SystemMessage(content=SUPERVISOR_PROMPT + context_msg)] + state["messages"]
+                )
+                route_decision = response.content.strip().lower().split()[0]
+                if route_decision not in {"search", "writer", "reviewer"}:
+                    route_decision = "end"
+                reasoning = f"No clear keywords → LLM classified as '{route_decision}'"
+                confidence = 0.6
+
+        # Add reasoning to trace
+        reasoning_trace.append(f"🧭 Supervisor: {reasoning} (confidence: {confidence:.0%})")
+
+        return {
+            "next": route_decision,
+            "reasoning_trace": reasoning_trace,
+            "supervisor_confidence": confidence
+        }
 
     # ── Agent node factory ─────────────────────────────────────────────────────
 
     def make_agent(agent_llm, system_prompt: str, agent_name: str):
         async def node(state: AgentState):
             msgs = state["messages"]
+            reasoning_trace = state.get("reasoning_trace", []).copy()
 
             # Add context for ReviewerAgent about what to review
             prompt = system_prompt
@@ -186,10 +240,15 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                 # Replace first system message with our enhanced prompt
                 msgs = [SystemMessage(content=prompt)] + msgs[1:]
 
+            # Phase 2.3: Log agent activation
+            agent_icons = {"search": "🔍", "writer": "✍️", "reviewer": "🔎"}
+            icon = agent_icons.get(agent_name, "🤖")
+            reasoning_trace.append(f"{icon} {agent_name.capitalize()} Agent: Processing request...")
+
             response = await agent_llm.ainvoke(msgs)
 
             # Extract review status from ReviewerAgent response
-            updates = {"messages": [], "active_agent": agent_name}
+            updates = {"messages": [], "active_agent": agent_name, "reasoning_trace": reasoning_trace}
             if agent_name == "reviewer":
                 content = response.content.lower()
                 revision_count = state.get("revision_count", 0)

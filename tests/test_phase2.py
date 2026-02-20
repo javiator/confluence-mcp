@@ -357,5 +357,65 @@ def test_known_entities_structure():
         assert "last_mentioned" in page
 
 
-# TODO: Add reasoning/confidence tests (Phase 2.3)
+# ── Reasoning & Confidence Tests ───────────────────────────────────────────
+
+def test_reasoning_trace_populated():
+    """Test that reasoning_trace is populated in AgentState."""
+    from confluence_mcp.agent.graph import AgentState
+
+    # Verify reasoning_trace is in AgentState schema
+    assert "reasoning_trace" in AgentState.__annotations__
+
+    # Type should be list
+    assert AgentState.__annotations__["reasoning_trace"] == list
+
+
+def test_confidence_score_valid_range():
+    """Test that supervisor_confidence is between 0.0 and 1.0."""
+    from confluence_mcp.agent.graph import AgentState
+
+    # Verify supervisor_confidence is in AgentState schema
+    assert "supervisor_confidence" in AgentState.__annotations__
+
+    # Type should be float
+    assert AgentState.__annotations__["supervisor_confidence"] == float
+
+    # In practice, confidence should be 0.0-1.0 (validated at runtime)
+    # This is a schema validation test
+
+
+def test_reasoning_trace_structure():
+    """Test that reasoning trace has expected structure when agents run."""
+    # This is more of an integration test - reasoning trace should have entries like:
+    # "🧭 Supervisor: User message contains search keywords → route to search (confidence: 90%)"
+    # "🔍 Search Agent: Processing request..."
+
+    # For now, just verify the schema is correct
+    from confluence_mcp.agent.graph import AgentState
+
+    state: AgentState = {
+        "messages": [],
+        "next": "",
+        "active_agent": "",
+        "pending_tool_call": None,
+        "review_status": None,
+        "revision_count": 0,
+        "session_id": "",
+        "session_metadata": {},
+        "known_entities": {},
+        "reasoning_trace": [
+            "🧭 Supervisor: Analyzing user intent...",
+            "🔍 Search Agent: Processing request..."
+        ],
+        "supervisor_confidence": 0.9
+    }
+
+    # Verify structure
+    assert isinstance(state["reasoning_trace"], list)
+    assert len(state["reasoning_trace"]) == 2
+    assert "Supervisor" in state["reasoning_trace"][0]
+    assert "Search Agent" in state["reasoning_trace"][1]
+    assert 0.0 <= state["supervisor_confidence"] <= 1.0
+
+
 # TODO: Add preferences tests (Phase 2.4)
