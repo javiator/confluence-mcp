@@ -157,123 +157,70 @@ async def on_message(message: cl.Message):
         await cl.Message(content=sessions_text).send()
         return
 
-    graph = cl.user_session.get("graph")
-
-    if not graph:
-        # Fallback: try to re-initialize if missing (e.g. after reload)
-        provider = os.environ.get("LLM_PROVIDER", "openai")
-        model = os.environ.get("LLM_MODEL", "gpt-4o")
+    # ---------------------------------------------------------
+    # Phase 3: CREWAI EXECUTION PATH
+    # ---------------------------------------------------------
+    try:
+        from confluence_mcp.agent.frameworks.crewai_impl import create_confluence_crew
+        from crewai import Task
         
         mcp_client = cl.user_session.get("mcp_client")
-        if not mcp_client:
-             mcp_client = MCPClient()
-             try:
-                await mcp_client.connect()
-                cl.user_session.set("mcp_client", mcp_client)
-             except Exception as e:
-                await cl.Message(content=f"Error initializing agent: {e}").send()
-                return
+        provider = os.environ.get("LLM_PROVIDER", "openai")
+        model = os.environ.get("LLM_MODEL", "gpt-4o")
 
-        try:
-            graph = create_graph(mcp_client, provider, model)
-            cl.user_session.set("graph", graph)
-        except Exception as e:
-            await cl.Message(content=f"Error initializing agent: {e}").send()
-            return
+        # Re-instantiate agents from factory
+        crew_components = create_confluence_crew(mcp_client, provider, model)
+        search_agent = crew_components["search_agent"]
+        writer_agent = crew_components["writer_agent"]
+        reviewer_agent = crew_components["reviewer_agent"]
 
-    # Maintain conversation history in session
-    history = cl.user_session.get("history", [])
-    history.append(HumanMessage(content=message.content))
+        msg = cl.Message(content="")
+        await msg.send()
 
-    # Get or initialize Phase 2 state fields
-    known_entities = cl.user_session.get("known_entities", {
-        "pages": [],
-        "spaces": [],
-        "last_page": None,
-        "last_space": None,
-    })
-    reasoning_trace = cl.user_session.get("reasoning_trace", [])
-    session_id = cl.user_session.get("session_id", str(uuid.uuid4()))
-    session_metadata = cl.user_session.get("session_metadata", {
-        "created_at": datetime.now().isoformat(),
-    })
+        # Dynamic task mapping based on simple heuristics since CrewAI
+        # needs explicit tasks. In production, a Router Agent would do this.
+        user_input = message.content.lower()
+        tasks = []
 
-    # Initialize graph state with all required fields
-    inputs = {
-        "messages": history,
-        "next": "supervisor",
-        "active_agent": "",
-        "pending_tool_call": None,
-        "review_status": None,
-        "revision_count": 0,
-        "session_id": session_id,
-        "session_metadata": session_metadata,
-        "known_entities": known_entities,
-        "reasoning_trace": reasoning_trace,
-        "supervisor_confidence": 0.0,
-    }
+        if any(word in user_input for word in ["create", "update", "write", "draft"]):
+            # Write + Review flow
+            write_task = Task(
+                description=f'Fulfill this user request to write/update documentation: "{message.content}"',
+                agent=writer_agent,
+                expected_output='Properly formatted Confluence XHTML content, drafted or published.'
+            )
+            review_task = Task(
+                description='Review the drafted content from the writer. If it needs fixing, explain what must change. If it is good, approve it.',
+                agent=reviewer_agent,
+                expected_output='A review summary: APPROVED or NEEDS REVISION.',
+                context=[write_task]
+            )
+            tasks = [write_task, review_task]
+        else:
+            # Default to Search
+            search_task = Task(
+                description=f'Find information to answer this user query: "{message.content}"',
+                agent=search_agent,
+                expected_output='A summary of findings with Confluence page titles and URLs.'
+            )
+            tasks = [search_task]
 
-    msg = cl.Message(content="")
-    await msg.send()
+        from crewai import Crew, Process
+        active_crew = Crew(
+            agents=[search_agent, writer_agent, reviewer_agent],
+            tasks=tasks,
+            process=Process.sequential,
+            verbose=True
+        )
 
-    current_step = None   # active tool step
-    agent_step = None     # active agent badge step
+        # CrewAI execution is synchronous, so we run it in a thread to not block Chainlit UI
+        # We use cl.make_async to run sync code asynchronously
+        result = await cl.make_async(active_crew.kickoff)()
 
-    try:
-        async for event in graph.astream_events(inputs, version="v1"):
-            kind = event["event"]
-            node  = event.get("name", "")
-
-            # Show which agent node just started
-            if kind == "on_chain_start" and node in AGENT_LABELS:
-                agent_step = cl.Step(name=AGENT_LABELS[node], type="run", parent_id=msg.id)
-                agent_step.input = ""
-                await agent_step.send()
-
-            elif kind == "on_chain_end" and node in AGENT_LABELS and agent_step:
-                await agent_step.update()
-                agent_step = None
-
-            elif kind == "on_chat_model_stream":
-                content = event["data"]["chunk"].content
-                if content:
-                    if isinstance(content, list):
-                        parts = [b if isinstance(b, str) else b.get("text", "") for b in content]
-                        content = "".join(parts)
-                    if isinstance(content, str):
-                        await msg.stream_token(content)
-
-            elif kind == "on_tool_start":
-                import json as _json
-                tool_input = event["data"].get("input")
-                if isinstance(tool_input, (dict, list)):
-                    tool_input = _json.dumps(tool_input, indent=2)
-                current_step = cl.Step(name=event["name"], type="tool", parent_id=msg.id)
-                current_step.input = tool_input
-                current_step.language = "json"
-                await current_step.send()
-
-            elif kind == "on_tool_end" and current_step:
-                import json as _json
-                tool_output = event["data"].get("output")
-                if hasattr(tool_output, "content"):
-                    raw = tool_output.content
-                    if isinstance(raw, list):
-                        current_step.output = "\n".join(
-                            b if isinstance(b, str) else b.get("text", "") for b in raw
-                        )
-                    elif isinstance(raw, (dict, list)):
-                        current_step.output = _json.dumps(raw, indent=2)
-                        current_step.language = "json"
-                    else:
-                        current_step.output = str(raw)
-                else:
-                    current_step.output = str(tool_output)
-                await current_step.update()
-                current_step = None
-
+        await msg.stream_token(str(result.raw))
+        
     except Exception as e:
-        await cl.Message(content=f"Error during execution: {str(e)}").send()
+        await cl.Message(content=f"Error executing CrewAI: {str(e)}").send()
         return
 
     # Update history with the result
