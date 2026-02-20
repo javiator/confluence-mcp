@@ -106,7 +106,7 @@ async def on_chat_start():
         pass  # Could add welcome message here
 
 @cl.on_chat_resume
-async def on_chat_resume(thread: cl.ThreadDict):
+async def on_chat_resume(thread: dict):
     """Resume a previous chat session."""
     # Load conversation history from memory
     memory_store = MemoryStore()
