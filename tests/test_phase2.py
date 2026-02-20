@@ -176,6 +176,186 @@ def test_memory_store_delete_session():
             os.unlink(db_path)
 
 
-# TODO: Add entity tracking tests (Phase 2.2)
+# ── Entity Tracking Tests ──────────────────────────────────────────────────
+
+def test_entity_extraction_from_search():
+    """Test that search results extract page entities correctly."""
+    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+
+    # Simulate search_confluence tool result
+    tool_result = """
+    {
+        "results": [
+            {
+                "id": "12345",
+                "title": "API Documentation",
+                "space": {"key": "ENG"},
+                "_links": {"webui": "/wiki/spaces/ENG/pages/12345"}
+            },
+            {
+                "id": "67890",
+                "title": "Deployment Guide",
+                "space": {"key": "OPS"},
+                "_links": {"webui": "/wiki/spaces/OPS/pages/67890"}
+            }
+        ]
+    }
+    """
+
+    entities = extract_entities_from_tool_result(
+        tool_name="search_confluence",
+        tool_args={"query": "API"},
+        tool_result=tool_result,
+        current_entities=None
+    )
+
+    # Should have extracted 2 pages
+    assert "pages" in entities
+    assert len(entities["pages"]) == 2
+
+    # Pages are added in reverse order (last result inserted first)
+    # So the last page in results (67890) is at index 0
+    first_page = entities["pages"][0]
+    assert first_page["id"] == "67890"
+    assert first_page["title"] == "Deployment Guide"
+    assert first_page["space"] == "OPS"
+
+    # Second page should be the first result
+    second_page = entities["pages"][1]
+    assert second_page["id"] == "12345"
+
+    # Check last_page points to most recently added (last in results)
+    assert entities["last_page"]["id"] == "67890"
+    assert entities["last_page"]["title"] == "Deployment Guide"
+
+
+def test_entity_context_injection_supervisor():
+    """Test that entity context is formatted correctly for prompts."""
+    from confluence_mcp.agent.entities import format_entity_context
+
+    entities = {
+        "pages": [
+            {"id": "123", "title": "API Docs", "space": "ENG", "url": "/123", "last_mentioned": "2024-01-01"},
+            {"id": "456", "title": "Deploy Guide", "space": "OPS", "url": "/456", "last_mentioned": "2024-01-01"},
+        ],
+        "spaces": ["ENG", "OPS"],
+        "last_page": {"id": "123", "title": "API Docs", "space": "ENG"},
+        "last_space": "ENG",
+    }
+
+    context = format_entity_context(entities)
+
+    # Should mention the last page
+    assert "API Docs" in context
+    assert "123" in context
+    assert "ENG" in context
+
+    # Should mention last space
+    assert "Last space mentioned: ENG" in context
+
+    # Should mention other recent pages
+    assert "Deploy Guide" in context or "456" in context
+
+
+def test_entity_recency_ordering():
+    """Test that only the 10 most recent pages are kept."""
+    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+    import json
+
+    # Create 15 pages
+    pages_data = {
+        "results": [
+            {
+                "id": str(i),
+                "title": f"Page {i}",
+                "space": {"key": "TEST"},
+                "_links": {"webui": f"/page/{i}"}
+            }
+            for i in range(1, 16)  # 15 pages
+        ]
+    }
+
+    entities = extract_entities_from_tool_result(
+        tool_name="search_confluence",
+        tool_args={"query": "test"},
+        tool_result=json.dumps(pages_data),
+        current_entities=None
+    )
+
+    # Should only keep 10 most recent (capped at 10)
+    assert len(entities["pages"]) == 10
+
+    # Pages added in reverse order, so page 15 (last in results) is first
+    # But we only keep 10, so we should have pages 6-15
+    page_ids = [p["id"] for p in entities["pages"]]
+    assert "15" in page_ids  # Last page in results
+    assert "6" in page_ids   # 10th page back
+
+    # Most recently added is page 15 (last in the results array)
+    assert entities["last_page"]["id"] == "15"
+
+
+def test_coreference_resolution():
+    """Test that 'it', 'that page', etc. resolve to last_page."""
+    from confluence_mcp.agent.entities import resolve_coreference
+
+    entities = {
+        "pages": [{"id": "12345", "title": "API Docs", "space": "ENG"}],
+        "last_page": {"id": "12345", "title": "API Docs", "space": "ENG"},
+        "last_space": "ENG",
+        "spaces": ["ENG"]
+    }
+
+    # Test "it" resolution
+    text1 = "Update it with new content"
+    resolved1 = resolve_coreference(text1, entities)
+    assert "12345" in resolved1
+    assert "API Docs" in resolved1
+
+    # Test "that page" resolution
+    text2 = "Review that page"
+    resolved2 = resolve_coreference(text2, entities)
+    assert "12345" in resolved2
+    assert "API Docs" in resolved2
+
+    # Test "that space" resolution
+    text3 = "Create a page in that space"
+    resolved3 = resolve_coreference(text3, entities)
+    assert "ENG" in resolved3
+
+
+def test_known_entities_structure():
+    """Test that known_entities dict has the expected structure."""
+    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+
+    entities = extract_entities_from_tool_result(
+        tool_name="search_confluence",
+        tool_args={"query": "test"},
+        tool_result='{"results": [{"id": "123", "title": "Test", "space": {"key": "TST"}, "_links": {"webui": "/123"}}]}',
+        current_entities=None
+    )
+
+    # Required keys
+    assert "pages" in entities
+    assert "spaces" in entities
+    assert "last_page" in entities
+    assert "last_space" in entities
+
+    # Types
+    assert isinstance(entities["pages"], list)
+    assert isinstance(entities["spaces"], list)
+    assert isinstance(entities["last_page"], dict) or entities["last_page"] is None
+    assert isinstance(entities["last_space"], str) or entities["last_space"] is None
+
+    # Page structure
+    if entities["pages"]:
+        page = entities["pages"][0]
+        assert "id" in page
+        assert "title" in page
+        assert "space" in page
+        assert "url" in page
+        assert "last_mentioned" in page
+
+
 # TODO: Add reasoning/confidence tests (Phase 2.3)
 # TODO: Add preferences tests (Phase 2.4)

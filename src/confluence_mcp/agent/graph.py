@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from confluence_mcp.agent.client import MCPClient
 from confluence_mcp.agent.llm import get_llm
+from confluence_mcp.agent.entities import extract_entities_from_tool_result, format_entity_context
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ class AgentState(TypedDict):
     # Phase 2: Memory & Intelligence
     session_id: str                    # unique conversation ID for persistence
     session_metadata: dict             # session creation time, user info, etc.
+    known_entities: dict               # tracked pages/spaces for coreference resolution
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -141,6 +143,13 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
         elif state.get("review_status") == "needs_revision":
             context_msg = f"\n[Context: Reviewer requested changes (iteration {revision_count}/{MAX_REVISION_ITERATIONS}), writer should revise]"
 
+        # Phase 2: Add entity context
+        entities = state.get("known_entities", {})
+        if entities:
+            entity_context = format_entity_context(entities)
+            if entity_context:
+                context_msg += "\n\n" + entity_context
+
         response = await llm.ainvoke(
             [SystemMessage(content=SUPERVISOR_PROMPT + context_msg)] + state["messages"]
         )
@@ -162,6 +171,14 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                 revision_count = state.get("revision_count", 0)
                 iteration_info = f" (Revision {revision_count + 1}/{MAX_REVISION_ITERATIONS})" if revision_count > 0 else ""
                 prompt += f"\n\n[DRAFT TO REVIEW{iteration_info}]\nTool: {pending['name']}\nParameters: {pending['args']}\n\nReview this draft before it's published."
+
+            # Phase 2: Add entity context for WriterAgent and SearchAgent
+            if agent_name in ("writer", "search"):
+                entities = state.get("known_entities", {})
+                if entities:
+                    entity_context = format_entity_context(entities)
+                    if entity_context:
+                        prompt += "\n\n" + entity_context
 
             if not isinstance(msgs[0], SystemMessage):
                 msgs = [SystemMessage(content=prompt)] + msgs
@@ -217,6 +234,7 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
 
         results = []
         pending = None
+        known_entities = state.get("known_entities", {})
 
         for call in last.tool_calls:
             tool_name = call["name"]
@@ -233,6 +251,10 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                         name=tool_name,
                         content=output,
                     ))
+                    # Phase 2: Extract entities from executed tool
+                    known_entities = extract_entities_from_tool_result(
+                        tool_name, tool_args, output, known_entities
+                    )
                 else:
                     # Hold for review
                     pending = {"name": tool_name, "args": tool_args, "id": tool_id}
@@ -250,8 +272,12 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                     name=tool_name,
                     content=output,
                 ))
+                # Phase 2: Extract entities from executed tool
+                known_entities = extract_entities_from_tool_result(
+                    tool_name, tool_args, output, known_entities
+                )
 
-        updates = {"messages": results}
+        updates = {"messages": results, "known_entities": known_entities}
         if pending:
             updates["pending_tool_call"] = pending
         elif state.get("review_status") == "approved":
