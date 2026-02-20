@@ -45,23 +45,42 @@ def create_crewai_tools(mcp_client: MCPClient, allowed_tools: set):
         # Determine the wrapper function for this tool
         wrapper = create_sync_wrapper(name)
 
-        # CrewAI Agents in newer versions require tools to be either
-        # instances of BaseTool (from crewai.tools) or specific LangChain tools.
-        # We use a factory function to create a unique class per tool,
-        # which avoids closure/scoping issues and Pydantic validation errors.
         from crewai.tools import BaseTool
+        from pydantic import BaseModel, Field, create_model
 
-        def create_mcp_tool_instance(tool_name, tool_desc, run_func):
+        # Helper to convert JSON Schema to Pydantic Model (Simplified)
+        def json_schema_to_pydantic(schema_dict, model_name):
+            properties = schema_dict.get("properties", {})
+            required = schema_dict.get("required", [])
+            
+            fields = {}
+            for prop_name, prop_info in properties.items():
+                prop_type = Any # Default
+                # Basic type mapping
+                json_type = prop_info.get("type")
+                if json_type == "string": prop_type = str
+                elif json_type == "integer": prop_type = int
+                elif json_type == "boolean": prop_type = bool
+                
+                default = ... if prop_name in required else None
+                fields[prop_name] = (prop_type, Field(default=default, description=prop_info.get("description", "")))
+            
+            return create_model(model_name, **fields)
+
+        args_model = json_schema_to_pydantic(t.inputSchema, f"{name}Schema")
+
+        def create_mcp_tool_instance(tool_name, tool_desc, run_func, schema_model):
             class MCPCustomTool(BaseTool):
                 name: str = tool_name
                 description: str = tool_desc
+                args_schema: Any = schema_model
                 
                 def _run(self, **kwargs) -> Any:
                     return run_func(**kwargs)
             
             return MCPCustomTool()
 
-        crew_tools.append(create_mcp_tool_instance(name, t.description, wrapper))
+        crew_tools.append(create_mcp_tool_instance(name, t.description, wrapper, args_model))
         
     return crew_tools
 
@@ -123,5 +142,5 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         "search_agent": search_agent,
         "writer_agent": writer_agent,
         "reviewer_agent": reviewer_agent,
-        "llm": llm
+        "llm": llm_identifier
     }
