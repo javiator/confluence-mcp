@@ -65,13 +65,3 @@ echo "Next: claude/phase-${NEXT_PHASE}-${SESSION_ID}"
     echo "  2. Read Phase ${NEXT_PHASE} objectives in ROADMAP.md"
     echo "  3. Start implementing Phase ${NEXT_PHASE}"
     echo ""
-
-else
-    echo "❌ Error: Not on a phase branch"
-    echo "Current branch: ${CURRENT_BRANCH}"
-    echo ""
-    echo "Expected format: learning/phase-{N}"
-    echo ""
-    echo "Are you on the correct branch?"
-    exit 1
-fi
