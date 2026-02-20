@@ -45,13 +45,13 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 **Objective**: Introduce multi-agent coordination with specialized agents
 
 **Tasks**:
-- [ ] Create `SearchAgent` — specialized in Confluence search & retrieval
-- [ ] Create `WriterAgent` — specialized in creating/updating pages
-- [ ] Create `ReviewerAgent` — validates content quality before publish
-- [ ] Implement supervisor pattern for routing between agents
-- [ ] Add agent activity visualization to Chainlit UI
-- [ ] Write Phase 1 tests (`tests/test_phase1.py`)
-- [ ] Benchmark multi-agent vs single agent performance
+- [x] Create `SearchAgent` — search_confluence, get_confluence_page, get_confluence_children
+- [x] Create `WriterAgent` — create/prepare_merge/update_full
+- [x] Create `ReviewerAgent` — get_confluence_page + quality review prompt
+- [x] Implement supervisor pattern for routing between agents
+- [x] Add agent activity visualization to Chainlit UI (🔍/✍️/🔎 step badges)
+- [x] Write Phase 1 tests (`tests/test_phase1.py`) — 6 tests, all passing
+- [ ] Benchmark multi-agent vs single agent performance (measure in real use)
 
 **Estimated Time**: 1 week
 

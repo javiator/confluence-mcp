@@ -1,18 +1,18 @@
-import sys
 import os
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Add the project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
-
 import chainlit as cl
-import json
 from langchain_core.messages import HumanMessage, AIMessage
-from src.confluence_mcp.agent.client import MCPClient
-from src.confluence_mcp.agent.graph import create_graph
+from confluence_mcp.agent.client import MCPClient
+from confluence_mcp.agent.graph import create_graph
+
+AGENT_LABELS = {
+    "search":   "🔍 Search Agent",
+    "writer":   "✍️  Writer Agent",
+    "reviewer": "🔎 Reviewer Agent",
+    "supervisor": "🧭 Supervisor",
+}
 
 # Global MCP Client removed to prevent shared state issues
 # mcp_client = MCPClient()
@@ -95,76 +95,62 @@ async def on_message(message: cl.Message):
     
     msg = cl.Message(content="")
     await msg.send()
-    
-    # We will track the current tool step to update it
-    current_step = None
-    
+
+    current_step = None   # active tool step
+    agent_step = None     # active agent badge step
+
     try:
         async for event in graph.astream_events(inputs, version="v1"):
             kind = event["event"]
-            
-            if kind == "on_chat_model_stream":
+            node  = event.get("name", "")
+
+            # Show which agent node just started
+            if kind == "on_chain_start" and node in AGENT_LABELS:
+                agent_step = cl.Step(name=AGENT_LABELS[node], type="run", parent_id=msg.id)
+                agent_step.input = ""
+                await agent_step.send()
+
+            elif kind == "on_chain_end" and node in AGENT_LABELS and agent_step:
+                await agent_step.update()
+                agent_step = None
+
+            elif kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
                 if content:
-                    # Ensure content is a string (it might be a list for multimodal models)
                     if isinstance(content, list):
-                        # Extract text from list of blocks if possible
-                        text_parts = []
-                        for block in content:
-                            if isinstance(block, str):
-                                text_parts.append(block)
-                            elif isinstance(block, dict) and "text" in block:
-                                text_parts.append(block["text"])
-                        content = "".join(text_parts)
-                    
+                        parts = [b if isinstance(b, str) else b.get("text", "") for b in content]
+                        content = "".join(parts)
                     if isinstance(content, str):
                         await msg.stream_token(content)
-                    
+
             elif kind == "on_tool_start":
-                # Create a new step for the tool
-                tool_name = event["name"]
+                import json as _json
                 tool_input = event["data"].get("input")
-                
-                # Format input as JSON for better readability
                 if isinstance(tool_input, (dict, list)):
-                    import json
-                    tool_input = json.dumps(tool_input, indent=2)
-                
-                current_step = cl.Step(
-                    name=tool_name,
-                    type="tool",
-                    parent_id=msg.id, # Nest step under the main message
-                )
+                    tool_input = _json.dumps(tool_input, indent=2)
+                current_step = cl.Step(name=event["name"], type="tool", parent_id=msg.id)
                 current_step.input = tool_input
                 current_step.language = "json"
                 await current_step.send()
-                
-            elif kind == "on_tool_end":
-                if current_step:
-                    tool_output = event["data"].get("output")
-                    # If output is a ToolMessage, extract content
-                    if hasattr(tool_output, "content"):
-                        content = tool_output.content
-                        if isinstance(content, list):
-                             # Handle list content (e.g. from MCP tools returning multiple blocks)
-                             text_parts = []
-                             for block in content:
-                                 if isinstance(block, str):
-                                     text_parts.append(block)
-                                 elif isinstance(block, dict) and "text" in block:
-                                     text_parts.append(block["text"])
-                             current_step.output = "\n".join(text_parts)
-                        elif isinstance(content, (dict, list)):
-                             import json
-                             current_step.output = json.dumps(content, indent=2)
-                             current_step.language = "json"
-                        else:
-                            current_step.output = str(content)
+
+            elif kind == "on_tool_end" and current_step:
+                import json as _json
+                tool_output = event["data"].get("output")
+                if hasattr(tool_output, "content"):
+                    raw = tool_output.content
+                    if isinstance(raw, list):
+                        current_step.output = "\n".join(
+                            b if isinstance(b, str) else b.get("text", "") for b in raw
+                        )
+                    elif isinstance(raw, (dict, list)):
+                        current_step.output = _json.dumps(raw, indent=2)
+                        current_step.language = "json"
                     else:
-                        current_step.output = str(tool_output)
-                    
-                    await current_step.update()
-                    current_step = None
+                        current_step.output = str(raw)
+                else:
+                    current_step.output = str(tool_output)
+                await current_step.update()
+                current_step = None
 
     except Exception as e:
         await cl.Message(content=f"Error during execution: {str(e)}").send()
