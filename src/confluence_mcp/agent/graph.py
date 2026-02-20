@@ -13,6 +13,11 @@ class AgentState(TypedDict):
     active_agent: str                  # tracks which agent owns pending tool calls
     pending_tool_call: Optional[dict]  # holds create/update calls for pre-publish review
     review_status: Optional[str]       # "approved" | "needs_revision" | None
+    revision_count: int                # tracks review-revision cycles (safeguard against infinite loops)
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+
+MAX_REVISION_ITERATIONS = 3  # Maximum review-revision cycles before auto-approval
 
 # ── Tool groups ────────────────────────────────────────────────────────────────
 
@@ -123,12 +128,14 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
     async def supervisor_node(state: AgentState):
         # Enhanced context: include pending state info
         context_msg = ""
+        revision_count = state.get("revision_count", 0)
+
         if state.get("pending_tool_call"):
             context_msg = "\n[Context: Writer has drafted content, awaiting review]"
         elif state.get("review_status") == "approved":
             context_msg = "\n[Context: Reviewer approved draft, ready to publish]"
         elif state.get("review_status") == "needs_revision":
-            context_msg = "\n[Context: Reviewer requested changes, writer should revise]"
+            context_msg = f"\n[Context: Reviewer requested changes (iteration {revision_count}/{MAX_REVISION_ITERATIONS}), writer should revise]"
 
         response = await llm.ainvoke(
             [SystemMessage(content=SUPERVISOR_PROMPT + context_msg)] + state["messages"]
@@ -148,7 +155,9 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
             prompt = system_prompt
             if agent_name == "reviewer" and state.get("pending_tool_call"):
                 pending = state["pending_tool_call"]
-                prompt += f"\n\n[DRAFT TO REVIEW]\nTool: {pending['name']}\nParameters: {pending['args']}\n\nReview this draft before it's published."
+                revision_count = state.get("revision_count", 0)
+                iteration_info = f" (Revision {revision_count + 1}/{MAX_REVISION_ITERATIONS})" if revision_count > 0 else ""
+                prompt += f"\n\n[DRAFT TO REVIEW{iteration_info}]\nTool: {pending['name']}\nParameters: {pending['args']}\n\nReview this draft before it's published."
 
             if not isinstance(msgs[0], SystemMessage):
                 msgs = [SystemMessage(content=prompt)] + msgs
@@ -159,13 +168,38 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
             response = await agent_llm.ainvoke(msgs)
 
             # Extract review status from ReviewerAgent response
-            updates = {"messages": [response], "active_agent": agent_name}
+            updates = {"messages": [], "active_agent": agent_name}
             if agent_name == "reviewer":
                 content = response.content.lower()
-                if "approved" in content and "needs revision" not in content:
+                revision_count = state.get("revision_count", 0)
+
+                # Check if max revisions reached
+                if revision_count >= MAX_REVISION_ITERATIONS:
+                    # Auto-approve after max iterations to prevent infinite loop
                     updates["review_status"] = "approved"
+                    updates["revision_count"] = 0  # Reset counter
+                    warning_msg = AIMessage(content=f"⚠️ **Max revision limit reached ({MAX_REVISION_ITERATIONS} iterations).** Auto-approving to prevent infinite loop. Content will be published as-is.")
+                    updates["messages"] = [response, warning_msg]
+                elif "approved" in content and "needs revision" not in content:
+                    updates["review_status"] = "approved"
+                    updates["revision_count"] = 0  # Reset counter on approval
+                    if revision_count > 0:
+                        # Add success message after revisions
+                        success_msg = AIMessage(content=f"✅ **Approved after {revision_count} revision(s).**")
+                        updates["messages"] = [response, success_msg]
+                    else:
+                        updates["messages"] = [response]
                 elif "needs revision" in content or "needs_revision" in content:
                     updates["review_status"] = "needs_revision"
+                    next_count = revision_count + 1
+                    updates["revision_count"] = next_count  # Increment counter
+                    # Add iteration counter to reviewer's response
+                    iteration_msg = AIMessage(content=f"📝 **Revision requested ({next_count}/{MAX_REVISION_ITERATIONS}).** Routing back to Writer for updates...")
+                    updates["messages"] = [response, iteration_msg]
+                else:
+                    updates["messages"] = [response]
+            else:
+                updates["messages"] = [response]
 
             return updates
         return node
@@ -220,6 +254,7 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
             # Clear state after successful publish
             updates["pending_tool_call"] = None
             updates["review_status"] = None
+            updates["revision_count"] = 0  # Reset counter after successful publish
 
         return updates
 

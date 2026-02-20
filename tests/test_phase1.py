@@ -79,3 +79,21 @@ def test_supervisor_understands_review_flow():
     """Supervisor prompt must understand the review approval cycle."""
     assert "reviewer" in SUPERVISOR_PROMPT.lower()
     assert "approved" in SUPERVISOR_PROMPT.lower() or "approval" in SUPERVISOR_PROMPT.lower()
+
+
+def test_revision_counter_in_state():
+    """AgentState must have revision_count to track review-revision cycles."""
+    keys = AgentState.__annotations__.keys()
+    assert "revision_count" in keys, "revision_count missing from AgentState"
+
+
+def test_max_revision_iterations_defined():
+    """MAX_REVISION_ITERATIONS must be defined to prevent infinite loops."""
+    from confluence_mcp.agent.graph import MAX_REVISION_ITERATIONS
+    assert isinstance(MAX_REVISION_ITERATIONS, int)
+    assert 2 <= MAX_REVISION_ITERATIONS <= 5, f"MAX_REVISION_ITERATIONS should be 2-5, got {MAX_REVISION_ITERATIONS}"
+
+
+def test_revision_counter_type():
+    """revision_count in AgentState should be typed as int."""
+    assert AgentState.__annotations__["revision_count"] == int

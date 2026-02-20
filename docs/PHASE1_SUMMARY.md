@@ -237,6 +237,44 @@ response = await llm.ainvoke([SystemMessage(SUPERVISOR_PROMPT + context)] + mess
 route = response.content.strip().lower().split()[0]
 ```
 
+### ⚠️ Infinite Loop Protection (Phase 1.2)
+
+**Problem**: Review-revision cycles could theoretically loop forever if the reviewer keeps rejecting.
+
+**Solution**: Automatic safeguards prevent infinite loops:
+
+```python
+MAX_REVISION_ITERATIONS = 3  # Configurable limit (2-5 recommended)
+```
+
+**How it works**:
+
+1. **Revision Counter**: `revision_count` field in AgentState tracks review cycles
+2. **Increment**: Counter increases by 1 each time reviewer requests changes
+3. **Auto-Approval**: After MAX_REVISION_ITERATIONS, system auto-approves with warning
+4. **Reset**: Counter resets to 0 on approval or successful publish
+
+**UI Visibility**:
+
+- **During revision**: `📝 Revision requested (2/3). Routing back to Writer for updates...`
+- **On approval after revisions**: `✅ Approved after 2 revision(s).`
+- **Max iterations hit**: `⚠️ Max revision limit reached (3 iterations). Auto-approving to prevent infinite loop. Content will be published as-is.`
+
+**Code locations**:
+- State schema: `graph.py:16` (revision_count field)
+- Config: `graph.py:19` (MAX_REVISION_ITERATIONS = 3)
+- Auto-approval logic: `graph.py:178-190` (reviewer agent node)
+- UI messages: `graph.py:182-202` (revision counter display)
+
+**Example flow with limit**:
+```
+1. WriterAgent creates draft → ReviewerAgent: "NEEDS REVISION" (1/3)
+2. WriterAgent revises → ReviewerAgent: "NEEDS REVISION" (2/3)
+3. WriterAgent revises → ReviewerAgent: "NEEDS REVISION" (3/3)
+4. System: "⚠️ Max revision limit reached (3 iterations). Auto-approving..."
+5. Content published as-is (prevents infinite loop)
+```
+
 ---
 
 ## 📊 Improvements Over Phase 0
@@ -253,8 +291,9 @@ route = response.content.strip().lower().split()[0]
 
 ## 🧪 Tests
 
-**13 tests, all passing** (`tests/test_phase1.py`):
+**16 tests, all passing** (`tests/test_phase1.py` + Phase 1.2 additions):
 
+**Phase 1.0/1.1 Tests** (10 tests):
 1. ✅ Tool groups are disjoint (search vs writer)
 2. ✅ Reviewer tools are subset of search
 3. ✅ All 6 MCP tools are covered
@@ -265,6 +304,11 @@ route = response.content.strip().lower().split()[0]
 8. ✅ Reviewer prompt has approval keywords
 9. ✅ Writer prompt has critical rules
 10. ✅ Supervisor understands review flow
+
+**Phase 1.2 Tests** (3 tests - Infinite Loop Protection):
+11. ✅ revision_count in AgentState
+12. ✅ MAX_REVISION_ITERATIONS defined and in range (2-5)
+13. ✅ revision_count typed as int
 
 ---
 
@@ -315,6 +359,7 @@ tests/
 2. **Pre-publish gate**: All creates/updates reviewed before execution
 3. **Clear criteria**: ReviewerAgent has explicit checklist
 4. **Revision loop**: Failed reviews route back to WriterAgent to fix
+5. **Infinite loop protection**: MAX_REVISION_ITERATIONS (3) prevents endless revision cycles
 
 ---
 
@@ -329,6 +374,12 @@ Phase 1 is **complete**. To continue learning:
 ---
 
 **Created**: 2026-02-20
-**Status**: ✅ Complete
-**Tests**: 13/13 passing
-**Branch**: `claude/phase-1-ceArC`
+**Updated**: 2026-02-20 (Phase 1.2 - Infinite Loop Protection)
+**Status**: ✅ Complete (Phase 1.0 → 1.1 → 1.2)
+**Tests**: 16/16 passing
+**Branch**: `claude/project-vision-multiagent-ceArC`
+
+**Phase History**:
+- **Phase 1.0**: Initial multi-agent implementation (4 agents, pre-publish review)
+- **Phase 1.1**: Documentation and learnings
+- **Phase 1.2**: Infinite loop protection (MAX_REVISION_ITERATIONS, revision counter, UI logging)
