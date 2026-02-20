@@ -24,7 +24,8 @@ dependencies = [
     "langchain-google-genai",
     "python-dotenv",
     "mcp",
-    "google-generativeai"
+    "google-generativeai",
+    "crewai>=1.9.3",
 ]
 
 [project.scripts]
