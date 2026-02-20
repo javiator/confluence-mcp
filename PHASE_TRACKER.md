@@ -50,7 +50,11 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 - [x] Create `ReviewerAgent` — get_confluence_page + quality review prompt
 - [x] Implement supervisor pattern for routing between agents
 - [x] Add agent activity visualization to Chainlit UI (🔍/✍️/🔎 step badges)
-- [x] Write Phase 1 tests (`tests/test_phase1.py`) — 6 tests, all passing
+- [x] **Phase 1.1 Enhancement**: Enhanced prompts with critical context (format, safety, merge rules)
+- [x] **Phase 1.1 Enhancement**: Pre-publish review flow (WriterAgent → ReviewerAgent → approve/reject gate)
+- [x] **Phase 1.1 Enhancement**: Post-publish review capability (explicit "review page X" requests)
+- [x] **Phase 1.1 Enhancement**: Tool gate intercepts create/update calls for quality control
+- [x] Write Phase 1 tests (`tests/test_phase1.py`) — 10 tests, all passing
 - [ ] Benchmark multi-agent vs single agent performance (measure in real use)
 
 **Estimated Time**: 1 week
