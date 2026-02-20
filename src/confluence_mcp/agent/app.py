@@ -114,9 +114,35 @@ async def on_message(message: cl.Message):
     # Maintain conversation history in session
     history = cl.user_session.get("history", [])
     history.append(HumanMessage(content=message.content))
-    
-    inputs = {"messages": history}
-    
+
+    # Get or initialize Phase 2 state fields
+    known_entities = cl.user_session.get("known_entities", {
+        "pages": [],
+        "spaces": [],
+        "last_page": None,
+        "last_space": None,
+    })
+    reasoning_trace = cl.user_session.get("reasoning_trace", [])
+    session_id = cl.user_session.get("session_id", str(uuid.uuid4()))
+    session_metadata = cl.user_session.get("session_metadata", {
+        "created_at": datetime.now().isoformat(),
+    })
+
+    # Initialize graph state with all required fields
+    inputs = {
+        "messages": history,
+        "next": "supervisor",
+        "active_agent": "",
+        "pending_tool_call": None,
+        "review_status": None,
+        "revision_count": 0,
+        "session_id": session_id,
+        "session_metadata": session_metadata,
+        "known_entities": known_entities,
+        "reasoning_trace": reasoning_trace,
+        "supervisor_confidence": 0.0,
+    }
+
     msg = cl.Message(content="")
     await msg.send()
 

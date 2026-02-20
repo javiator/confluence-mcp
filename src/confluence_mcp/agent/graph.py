@@ -196,7 +196,11 @@ def create_graph(mcp_client: MCPClient, provider: str = "openai", model: str = N
                 response = await llm.ainvoke(
                     [SystemMessage(content=SUPERVISOR_PROMPT + context_msg)] + state["messages"]
                 )
-                route_decision = response.content.strip().lower().split()[0]
+                # Safe extraction - handle empty responses
+                content = response.content.strip().lower()
+                words = content.split()
+                route_decision = words[0] if words else "search"  # Default to search if empty
+
                 if route_decision not in {"search", "writer", "reviewer"}:
                     route_decision = "end"
                 reasoning = f"No clear keywords → LLM classified as '{route_decision}'"
