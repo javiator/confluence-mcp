@@ -35,8 +35,11 @@ def get_llm(provider: str = "openai", model: Optional[str] = None) -> BaseChatMo
     elif provider == "ollama":
         from langchain_ollama import ChatOllama
         model = model or "llama3"
-        # Support both OLLAMA_BASE_URL and OLLAMA_HOST
-        base_url = os.environ.get("OLLAMA_BASE_URL") or os.environ.get("OLLAMA_HOST")
+        base_url = (
+            os.environ.get("OLLAMA_BASE_URL") or 
+            os.environ.get("OLLAMA_API_BASE") or 
+            os.environ.get("OLLAMA_HOST")
+        )
         if base_url and not base_url.startswith("http"):
             base_url = f"http://{base_url}"
         base_url = base_url or "http://localhost:11434"

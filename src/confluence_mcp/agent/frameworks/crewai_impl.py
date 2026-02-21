@@ -102,9 +102,22 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
             clean_model = clean_model.replace("models/", "")
         llm_identifier = f"gemini/{clean_model}"
     elif provider == "ollama":
-        # For Ollama, we use the LangChain object directly as LiteLLM's 
-        # environment-based routing can be brittle with local endpoints.
-        llm_identifier = get_llm(provider, model)
+        # We use 'ollama_chat/' prefix for LiteLLM to use the native Ollama API.
+        # This is more stable than the OpenAI-compatible bridge for local models.
+        model = model or "llama3"
+        llm_identifier = f"ollama_chat/{model}"
+        
+        # LiteLLM needs OLLAMA_API_BASE to know the server address
+        base_url = (
+            os.environ.get("OLLAMA_BASE_URL") or 
+            os.environ.get("OLLAMA_API_BASE") or 
+            os.environ.get("OLLAMA_HOST")
+        )
+        if base_url:
+            if not base_url.startswith("http"):
+                base_url = f"http://{base_url}"
+            # LiteLLM native Ollama provider expects the base URL (no /v1)
+            os.environ["OLLAMA_API_BASE"] = base_url.rstrip("/")
     else:
         # Fallback to langchain object if unknown
         llm_identifier = get_llm(provider, model)
