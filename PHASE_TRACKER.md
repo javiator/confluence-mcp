@@ -21,7 +21,7 @@
 | **Phase 0** | Foundation & Audit | 2-3 days | 🟢 Complete | `claude/phase-0-ceArC` | All 3 tests passing |
 | **Phase 1** | First Multi-Agent (LangGraph) | 1 week | 🟢 Complete | `claude/phase-1-ceArC` | 13/13 tests passing |
 | **Phase 2** | Intelligence & Memory | 1 day | 🟢 Complete | `claude/phase-2-ceArC` | 12/12 tests passing |
-| **Phase 3** | Experiment: CrewAI | 1 week | 🟡 In Progress | `claude/phase-3-ceArC` | Setting up |
+| **Phase 3** | Experiment: CrewAI | 1 day | 🟢 Complete | `claude/phase-3-ceArC` | Role-based agents working |
 | **Phase 4** | Experiment: AWS Bedrock | 1 week | ⚪ Pending | `claude/phase-4-ceArC` | |
 | **Phase 5** | Experiment: Google Vertex | 1 week | ⚪ Pending | `claude/phase-5-ceArC` | |
 | **Phase 6** | Framework Decision | 2-3 days | ⚪ Pending | `claude/phase-6-ceArC` | |
@@ -80,6 +80,30 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 
 ---
 
+### Phase 3: Experiment: CrewAI — ✅ COMPLETE
+
+**Objective**: Rebuild functionality using CrewAI and compare with LangGraph.
+
+**Tasks**:
+- [x] Port Agents (Search, Writer, Reviewer) to CrewAI format
+- [x] Implement dynamic tool wrappers for MCP (Pydantic v2 `BaseTool`)
+- [x] Resolve cross-thread async deadlocks with `run_coroutine_threadsafe`
+- [x] Implement real-time progress indicators via `step_callback`
+- [x] Add conversation memory via history injection into Task descriptions
+- [x] document framework comparison in `docs/frameworks/CREWAI_COMPARISON.md`
+
+**Key Deliverables**:
+1. CrewAI-powered Confluence Agents
+2. High-quality Pydantic schema generation for dynamic tools
+3. Thread-safe MCP integration bridge
+4. Detailed Side-by-Side comparison with LangGraph
+
+**When to Consider Complete**:
+- [x] Agent completes full search → write → review cycle ✅
+- [x] UI shows real-time progress steps ✅
+- [x] Agents remember user context (name, history) ✅
+- [x] Comparison document finalized ✅
+
 ## 🎓 Learning Log
 
 ### Phase 0 Learnings
@@ -117,13 +141,26 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 - 📝 **Serialization**: LangChain messages require careful JSON serialization (tool_calls, tool_call_id preservation)
 - 📝 **State Explosion**: Each new feature adds fields to AgentState - need discipline to avoid bloat
 
+### Phase 3 Learnings
+- ✅ **Role Abstraction**: CrewAI's `Agent` role/goal/backstory makes prompting very intuitive (9/10 DX)
+- ✅ **Pydantic Strictness**: `BaseTool` requires explicit `args_schema` derived from JSON schemas for dynamic tools
+- ✅ **Threading Constraints**: CrewAI runs in separate threads - `asyncio.run_coroutine_threadsafe` is mandatory for MCP bridge
+- ✅ **Task Statelessness**: Conversation history must be manually formatted and injected into task strings
+- ✅ **UI Responsiveness**: `step_callback` is essential to prevent "black box" behavior in Chainlit
+- 📝 **Key Pattern**: A Class Factory is the cleanest way to create CrewAI tools from dynamic MCP data
+- 📝 **Ordering logic**: Sequential processes in CrewAI require careful UI message management to keep final results at the bottom
+
 ### Framework Comparison Notes
 - **LangGraph**: ✅ Phase 1 Complete
   - **Pros**: Explicit state management, conditional routing, tool binding flexibility, good for complex workflows
   - **Cons**: More boilerplate (StateGraph, nodes, edges), steeper learning curve than simple chains
   - **Best for**: Multi-agent systems with approval gates, complex routing logic, state-dependent behavior
   - **Verdict so far**: Excellent control, suitable for production use
-- **CrewAI**: [Phase 3 - To be explored]
+- **CrewAI**: ✅ Phase 3 Complete
+  - **Pros**: Declarative role-playing, very low boilerplate for linear chains, intuitive task delegation
+  - **Cons**: Debugging threading is hard, stateless tasks require manual memory management, less control than Graph
+  - **Best for**: Content teams, research pipelines, autonomous sequential tasks
+  - **Verdict so far**: Excellent for speed of development; LangGraph better for complex state/human-gates
 - **AWS Bedrock**: [Phase 4 - To be explored]
 - **Google Vertex**: [Phase 5 - To be explored]
 
@@ -175,7 +212,7 @@ When you come back, tell Claude Code:
 
 ---
 
-**Last Updated**: 2026-02-20 (Phase 0 Complete → Phase 1 Complete in 1 day!)
-**Next Review Date**: When starting Phase 2
+**Last Updated**: 2026-02-20 (Phase 3 Complete)
+**Next Review Date**: When starting Phase 4
 
 **Phase 1 Summary**: See `docs/PHASE1_SUMMARY.md` for detailed architecture, flows, and examples.
