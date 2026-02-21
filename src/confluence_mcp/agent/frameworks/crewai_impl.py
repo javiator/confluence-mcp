@@ -100,6 +100,10 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
         if clean_model.startswith("models/"):
             clean_model = clean_model.replace("models/", "")
         llm_identifier = f"gemini/{clean_model}"
+    elif provider == "ollama":
+        # LiteLLM routes to local Ollama with the 'ollama/' prefix
+        model = model or "llama3"
+        llm_identifier = f"ollama/{model}"
     else:
         # Fallback to langchain object if unknown
         llm_identifier = get_llm(provider, model)

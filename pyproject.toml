@@ -27,6 +27,7 @@ dependencies = [
     "google-generativeai",
     "crewai[google-genai]>=1.9.3",
     "litellm>=1.75.3",
+    "langchain-ollama>=0.3.10",
 ]
 
 [project.scripts]

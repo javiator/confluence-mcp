@@ -26,11 +26,17 @@ def get_llm(provider: str = "openai", model: Optional[str] = None) -> BaseChatMo
         return ChatAnthropic(model=model, api_key=api_key, temperature=0)
         
     elif provider == "google":
-        model = model or "gemini-2.5-flash"
+        model = model or "gemini-2.0-flash"
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment")
         return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, temperature=0)
+        
+    elif provider == "ollama":
+        from langchain_ollama import ChatOllama
+        model = model or "llama3"
+        base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        return ChatOllama(model=model, base_url=base_url, temperature=0)
         
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
