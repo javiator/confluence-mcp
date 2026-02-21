@@ -28,6 +28,8 @@ dependencies = [
     "crewai[google-genai]>=1.9.3",
     "litellm>=1.75.3",
     "langchain-ollama>=0.3.10",
+    "apscheduler>=3.11.2",
+    "fastapi-sso>=0.20.0",
 ]
 
 [project.scripts]

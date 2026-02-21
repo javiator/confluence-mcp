@@ -1,3 +1,4 @@
+import os
 import asyncio
 from typing import Dict, Any, List
 from langchain_core.tools import StructuredTool
@@ -101,9 +102,9 @@ def create_confluence_crew(mcp_client: MCPClient, provider: str = "openai", mode
             clean_model = clean_model.replace("models/", "")
         llm_identifier = f"gemini/{clean_model}"
     elif provider == "ollama":
-        # LiteLLM routes to local Ollama with the 'ollama/' prefix
-        model = model or "llama3"
-        llm_identifier = f"ollama/{model}"
+        # For Ollama, we use the LangChain object directly as LiteLLM's 
+        # environment-based routing can be brittle with local endpoints.
+        llm_identifier = get_llm(provider, model)
     else:
         # Fallback to langchain object if unknown
         llm_identifier = get_llm(provider, model)
