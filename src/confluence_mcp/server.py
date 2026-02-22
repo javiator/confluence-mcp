@@ -83,11 +83,53 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
-def clean_html(html_content: str) -> str:
-    if not html_content:
-        return ""
-    soup = BeautifulSoup(html_content, "html.parser")
-    return soup.get_text(separator="\n").strip()
+import re
+
+def robust_sanitize_confluence_xhtml(body: str) -> str:
+    """
+    Repair broken Confluence XHTML macros using regex to preserve CDATA and formatting.
+    Fixes the common issue where LLMs omit 'ac:name' or 'ac:name' on parameters.
+    """
+    if not body:
+        return body
+
+    # Fix 1: <ac:parameter> missing ac:name
+    # Converts <ac:parameter>bash</ac:parameter> to <ac:parameter ac:name="language">bash</ac:parameter>
+    body = re.sub(
+        r'<ac:parameter>(.*?)</ac:parameter>',
+        r'<ac:parameter ac:name="language">\1</ac:parameter>',
+        body
+    )
+
+    # Fix 2: <ac:structured-macro> missing ac:name
+    # We look for macros that don't have ac:name and try to guess based on body type
+    def repair_macro(match):
+        full_tag = match.group(0)
+        inner_content = match.group(2)
+        
+        if 'ac:name=' in full_tag:
+            return full_tag
+            
+        # Guess name based on inner body tag
+        if '<ac:plain-text-body' in inner_content:
+            return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="code"')
+        elif '<ac:rich-text-body' in inner_content:
+            return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
+        
+        # Default fallback to info if we can't tell
+        return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
+
+    # Match <ac:structured-macro ...> ... </ac:structured-macro>
+    # Note: This regex is simple and doesn't handle nested macros perfectly, but agent output is usually flat.
+    body = re.sub(
+        r'(<ac:structured-macro[^>]*>)(.*?)(</ac:structured-macro>)',
+        repair_macro,
+        body,
+        flags=re.DOTALL
+    )
+
+    return body
+
 
 @mcp.tool()
 def search_confluence(query: str) -> List[Dict[str, Any]]:
@@ -238,7 +280,7 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
         "space": {"key": space_key},
         "body": {
             "storage": {
-                "value": body,
+                "value": robust_sanitize_confluence_xhtml(body),
                 "representation": "storage"
             }
         },
@@ -321,7 +363,7 @@ def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
             "space": {"key": space_key},
             "body": {
                 "storage": {
-                    "value": body,
+                    "value": robust_sanitize_confluence_xhtml(body),
                     "representation": "storage"
                 }
             },
