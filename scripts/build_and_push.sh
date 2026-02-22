@@ -17,4 +17,7 @@ docker tag confluence-mcp-server:latest $REPO_URL:latest
 echo "Pushing image..."
 docker push $REPO_URL:latest
 
-echo "✅ Image successfully pushed to ECR."
+echo "Updating Lambda function..."
+aws lambda update-function-code --function-name ConfluenceMCPServer --image-uri $REPO_URL:latest --region $REGION > /dev/null
+
+echo "✅ Image successfully pushed and Lambda updated."

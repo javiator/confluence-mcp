@@ -1,65 +1,40 @@
-# Phase 4.3: AWS Bedrock Multi-Agent System (MAS)
+# Phase 4.3: Bedrock Multi-Agent System (MAS)
 
-This document describes the implementation of the Confluence Multi-Agent System using native AWS Bedrock Supervisor and Collaborator features.
+This guide documents the implementation of the Multi-Agent System using AWS Bedrock Agents.
 
-## 🧭 Architecture: Supervisor & Specialist Roles
+## 1. Architecture Overview
 
-The system has evolved from a monolithic agent to a structured hierarchy of specialists, allowing for higher accuracy, better grounding, and specialized tool access.
+The system follows a **Supervisor-Collaborator** pattern:
 
-```mermaid
-graph TD
-    User["Chainlit Interface"] --> Supervisor["🧭 Supervisor Agent"]
-    
-    subgraph "Collaborators (Specialists)"
-        Supervisor --> Search["🔍 Search Specialist"]
-        Supervisor --> Writer["✍️ Technical Writer"]
-        Supervisor --> Review["🔎 Content Reviewer"]
-    end
-    
-    Search --> MCP["☁️ Confluence MCP (Proxy)"]
-    Writer --> MCP
-    Review --> MCP
-    
-    MCP --> Conf["Atlassian Confluence"]
-```
+*   **Supervisor Agent**: Orchestrates tasks and delegates to specialists.
+*   **Search Agent**: Discovers and reads Confluence content.
+*   **Writer Agent**: Creates and updates pages with safe formatting defaults.
+*   **Reviewer Agent**: Acts as a technical gatekeeper for XHTML compatibility.
 
-### Agent Personas
+## 2. Rendering & Formatting Strategy
 
-| Agent | Icon | Role & Responsibility |
-|-------|------|------------------------|
-| **Supervisor** | 🧭 | The Orchestrator. Analyzes intent and routes Tasks to specialists. Manages overall conversation flow. |
-| **Search Agent** | 🔍 | Information Retrieval. Specialized in finding, reading, and deep-linking Confluence pages. |
-| **Writer Agent** | ✍️ | Content Creation. Skilled in XHTML formatting. Must obtain approval from the Reviewer before publishing. |
-| **Reviewer Agent** | 🔎 | Quality Gate. Reviews drafts for structure, clarity, and XHTML validity against provided context. |
+To solve the "Error loading the extension!" issues, the system now enforces a **Standard-First** approach:
 
-## 🧠 Memory & History Sharing
+### Safe Formatting Defaults
+The Writer Agent is instructed to use standard HTML elements whenever possible:
+*   `<p>`, `<ul>`, `<li>`, `<ol>`
+*   `<h1>` through `<h4>`
+*   `<strong>`, `<em>`
+*   `<table>`
+*   `<code>` (for inline or simple blocks)
 
-One of the key breakthroughs in this Phase is the enablement of **Conversation History Sharing** (`relayConversationHistory` set to `TO_COLLABORATOR`).
+### Rich Formatting (Macros)
+Confluence macros (`info`, `note`, `code`) are used **only** when specifically requested or for high-impact content.
 
-### How Context is Passed
-When the user says: *"Create a page in space AR under parent 12345"*, and then in the next turn says: *"The title should be Team Goals"*:
-1.  **Supervisor** retains the session state.
-2.  **Supervisor** shares the relevant history (Space/Parent) with the **Writer Agent**.
-3.  **Writer Agent** uses that inherited context to execute the `create_confluence_page` tool without needing the user to repeat the parameters.
+## 3. Robust XHTML Sanitation
 
-## 🚀 Usage Guide
+The MCP server includes a server-side `robust_sanitize_confluence_xhtml` function that:
+1.  **Strips Zombie Macros**: Removes any `invalidmacro` tags left by failed Confluence rendering.
+2.  **Repairs Missing Attributes**: Automatically adds `ac:name` and `ac:parameter` names if the LLM forgets them.
+3.  **Preserves CDATA**: Uses targeted regex instead of HTML parsers to ensure code blocks remain intact.
 
-### Example Workflow: Creation & Update
-- **User**: "I want to create a documentation page in the AR space."
-- **Supervisor**: (Delegates to Search to find a parent) "I found the Engineering Home page (ID: 41123863). Should I put it there?"
-- **User**: "Yes. Title is 'API Strategy' and content is 'Modernizing our endpoints'."
-- **Supervisor**: (Delegates to Writer) "I've created the page for you!"
+## 4. Verification Flow
 
-### Best Practices for Prompts
-- **Be Specific about Goal**: "Search for X", "Review this draft", "Draft a new page".
-- **Leverage Multi-turn**: You don't need to provide all IDs in the first message; the system will guide you through the required parameters.
-
-## 🛠️ Infrastructure Details
-
-- **Terraform Managed**: All agents, collaborators, and action groups are defined in `terraform/main.tf`.
-- **Lambda Bridge**: All agents share a single IAM role and communicate with the MCP server via the `ConfluenceTools` proxy.
-- **Strict Grounding**: System instructions force agents to prioritize Confluence data over internal LLM knowledge.
-
----
-**Maintained by**: Antigravity AI  
-**Last Updated**: 2026-02-22
+1.  **Retrieve**: Always use `prepare_confluence_page_merge_update` to get clean base content.
+2.  **Verify**: The Reviewer Agent uses a technical checklist to approve/reject the draft.
+3.  **Publish**: Only APPROVED content is submitted to the Confluence API.
