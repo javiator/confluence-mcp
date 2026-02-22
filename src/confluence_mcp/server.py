@@ -374,7 +374,12 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
         if space_key not in ALLOWED_SPACES:
             return {"error": f"Page in space '{space_key}' cannot be prepared for merge (space not allowed)."}
             
-        labels = [l.get("name") for l in data.get("metadata", {}).get("labels", [])]
+        labels_raw = data.get("metadata", {}).get("labels", [])
+        if isinstance(labels_raw, str):
+             # Handle case where labels expansion might return a string or truncated data
+             labels = []
+        else:
+             labels = [l.get("name") if isinstance(l, dict) else str(l) for l in labels_raw]
         if "ai-generated" not in labels and "ai-managed" not in labels:
             return {"error": "Page does not have required 'ai-generated' or 'ai-managed' labels."}
             

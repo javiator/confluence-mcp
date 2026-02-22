@@ -1,0 +1,15 @@
+Title: How to Install Docker on Ubuntu
+ID: 41123863
+URL: https://architectureone.atlassian.net/wiki/spaces/AR/pages/41123863/How+to+Install+Docker+on+Ubuntu
+
+Content:
+Prerequisites
+Ubuntu 18.04 or later
+Sudo privileges
+Installation Steps
+Update the package index:
+Install packages to allow apt to use a repository over HTTPS:
+Add the official Docker GPG key:
+Set up the Docker repository:
+Install the Docker Engine, Docker CLI, and Docker Compose plugin:
+Verify the installation by running the "hello-world" Docker image:
