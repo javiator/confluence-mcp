@@ -85,6 +85,23 @@ def get_headers():
 
 import re
 
+def clean_html(html_content: str) -> str:
+    """Extract plain text from Confluence storage XHTML."""
+    if not html_content:
+        return ""
+    try:
+        soup = BeautifulSoup(html_content, "html.parser")
+        # Remove script and style elements
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+        # Get text, using a newline as a separator for block elements
+        text = soup.get_text(separator="\n")
+        # Clean up whitespace
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return "\n".join(lines)
+    except Exception:
+        return html_content # Fallback to raw if parsing fails
+
 def robust_sanitize_confluence_xhtml(body: str) -> str:
     if not body:
         return body
