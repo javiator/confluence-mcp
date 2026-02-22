@@ -86,22 +86,15 @@ def get_headers():
 import re
 
 def robust_sanitize_confluence_xhtml(body: str) -> str:
-    """
-    Repair broken Confluence XHTML macros using regex to preserve CDATA and formatting.
-    Fixes the common issue where LLMs omit 'ac:name' or 'ac:name' on parameters.
-    Also strips Confluence-generated 'invalidmacro' placeholders.
-    """
     if not body:
         return body
 
     # Fix 0: Strip Confluence-generated 'invalidmacro' placeholders COMPLETELY
-    # These look like <ac:structured-macro ac:name="invalidmacro" ... />
     body = re.sub(
         r'<ac:structured-macro ac:name="invalidmacro"[^>]*/>',
         '',
         body
     )
-    # Also handle the paired form just in case
     body = re.sub(
         r'<ac:structured-macro ac:name="invalidmacro"[^>]*>.*?</ac:structured-macro>',
         '',
@@ -109,9 +102,10 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
         flags=re.DOTALL
     )
 
+    # Fix 0.5: Strip <result> tags if the LLM wrapped the whole thing
+    body = re.sub(r'^<result>(.*?)</result>$', r'\1', body.strip(), flags=re.DOTALL)
+
     # Fix 1: <ac:parameter> missing ac:name
-    # Converts <ac:parameter>bash</ac:parameter> to <ac:parameter ac:name="language">bash</ac:parameter>
-    # Only if it doesn't already have one
     body = re.sub(
         r'<ac:parameter>(.*?)</ac:parameter>',
         r'<ac:parameter ac:name="language">\1</ac:parameter>',
@@ -119,11 +113,12 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
     )
 
     # Fix 2: <ac:structured-macro> missing ac:name
-    def repair_macro(match):
+    def repair_macro_callback(match):
         start_tag = match.group(1)
         inner_content = match.group(2)
         end_tag = match.group(3)
         
+        # If it already has ac:name, leave it as is
         if 'ac:name=' in start_tag:
             return match.group(0)
             
@@ -133,16 +128,15 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
         elif '<ac:rich-text-body' in inner_content:
             new_start = start_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
         else:
-            # Default fallback to info if we can't tell
             new_start = start_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
             
         return f"{new_start}{inner_content}{end_tag}"
 
     # Match <ac:structured-macro ...> ... </ac:structured-macro>
-    # Note: Using non-greedy match for inner content to avoid capturing multiple macros at once
+    # Using a slightly safer non-iterative approach that targets tags without ac:name
     body = re.sub(
-        r'(<ac:structured-macro[^>]*>)(.*?)(</ac:structured-macro>)',
-        repair_macro,
+        r'(<ac:structured-macro(?![^>]*ac:name=)[^>]*>)(.*?)(</ac:structured-macro>)',
+        repair_macro_callback,
         body,
         flags=re.DOTALL
     )
@@ -161,10 +155,14 @@ def _search_confluence(query: str) -> List[Dict[str, Any]]:
     If a parent page is specified in config, all its descendants are automatically allowed.
     """
     # Build base CQL query
-    # We recognize raw CQL if it contains typical operators like =, ~, IN, OR, AND (case insensitive)
+    # Check if the query looks like raw CQL (contains explicit operators and is not just a title)
     cql_operators = ["=", "~", " IN ", " OR ", " AND "]
-    if any(op in query or op.upper() in query.upper() for op in cql_operators):
-        # Assume raw or semi-raw CQL segment
+    is_raw_cql = any(op in query or op.upper() in query.upper() for op in cql_operators)
+    
+    # If it's a multi-word query but lacks explicit '=' or '~', assume it's a search term
+    # Titles like "How to Install and Uninstall Docker on Ubuntu" contain AND but aren't CQL.
+    # We force text search if no explicit property operator (~, =) is found.
+    if is_raw_cql and ("=" in query or "~" in query or " IN " in query.upper()):
         base_cql = f'({query}) AND type=page'
     else:
         # Simple text search - escape quotes and wrap in text search

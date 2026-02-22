@@ -189,7 +189,7 @@ resource "aws_bedrockagent_agent" "reviewer_agent" {
   agent_name              = "confluence-reviewer-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
   foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  instruction             = "You are the Reviewer Agent. You are a STRICT technical gatekeeper. MANDATORY COMPATIBILITY CHECK: 1) EVERY <ac:structured-macro> MUST have an 'ac:name' attribute. 2) EVERY <ac:parameter> MUST have an 'ac:name' attribute. 3) Code blocks MUST use <ac:plain-text-body> AND the content MUST be wrapped in a literal CDATA block: <![CDATA[ content ]]>. If the draft shows code without a CDATA wrapper, REJECT. 4) NO <ac:name=\"invalidmacro\"> allowed. APPROVAL: Respond with 'APPROVED: [reason]' only if XHTML is perfect. Otherwise, respond with 'NEEDS REVISION:' and specific syntax fixes."
+  instruction             = "You are the Reviewer Agent. You are a STRICT technical gatekeeper. MANDATORY COMPATIBILITY CHECK: 1) EVERY <ac:structured-macro> MUST have an 'ac:name' attribute. 2) EVERY <ac:parameter> MUST have an 'ac:name' attribute. 3) Code blocks MUST use <ac:plain-text-body> wrapped in <![CDATA[ content ]]>. 4) EMPTY MACROS ARE PROHIBITED: If a macro contains an empty <ac:plain-text-body> or <ac:rich-text-body>, REJECT. 5) NO <ac:name=\"invalidmacro\"> allowed. APPROVAL: Respond with 'APPROVED: [reason]' only if XHTML is perfect. Otherwise, respond with 'NEEDS REVISION:' and specific syntax fixes."
 }
 
 resource "aws_bedrockagent_agent_action_group" "reviewer_actions" {
@@ -223,7 +223,7 @@ resource "aws_bedrockagent_agent" "writer_agent" {
   agent_name              = "confluence-writer-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
   foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  instruction             = "You are the Writer Agent. CANONICAL CODE SYNTAX: <ac:structured-macro ac:name=\"code\"><ac:parameter ac:name=\"language\">bash</ac:parameter><ac:plain-text-body><![CDATA[your_code_here]]></ac:plain-text-body></ac:structured-macro>. MANDATORY RULE: Code ALWAYS goes inside <ac:plain-text-body> wrapped in <![CDATA[ ... ]]> inside a macro named 'code'. For all other text, use standard HTML: <p>, <ul>, <li>, <h1>-<h4>. These are 100% reliable. WORKFLOW: 1) Call prepare_confluence_page_merge_update. 2) Merge changes. 3) Submit draft to Reviewer. 4) ONLY write after 'APPROVED'."
+  instruction             = "You are the Writer Agent. CANONICAL CODE SYNTAX: <ac:structured-macro ac:name=\"code\"><ac:parameter ac:name=\"language\">bash</ac:parameter><ac:plain-text-body><![CDATA[your_code_here]]></ac:plain-text-body></ac:structured-macro>. MANDATORY RULE: Code ALWAYS goes inside <ac:plain-text-body> wrapped in <![CDATA[ ... ]]> inside a macro named 'code'. NEVER send empty macros; always include the actual content. For all other text, use standard HTML: <p>, <ul>, <li>, <h1>-<h4>. WORKFLOW: 1) Call prepare_confluence_page_merge_update. 2) Merge changes. 3) Submit draft to Reviewer. 4) ONLY write after 'APPROVED'."
 }
 
 resource "aws_bedrockagent_agent_action_group" "writer_actions" {
