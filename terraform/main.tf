@@ -315,6 +315,9 @@ resource "aws_bedrockagent_agent_alias" "search_alias" {
   routing_configuration {
     agent_version = aws_bedrockagent_agent.search_agent.agent_version
   }
+  lifecycle {
+    ignore_changes = [routing_configuration]
+  }
 }
 resource "aws_bedrockagent_agent_alias" "writer_alias" {
   agent_alias_name = "writer-alias"
@@ -322,12 +325,18 @@ resource "aws_bedrockagent_agent_alias" "writer_alias" {
   routing_configuration {
     agent_version = aws_bedrockagent_agent.writer_agent.agent_version
   }
+  lifecycle {
+    ignore_changes = [routing_configuration]
+  }
 }
 resource "aws_bedrockagent_agent_alias" "reviewer_alias" {
   agent_alias_name = "reviewer-alias"
   agent_id         = aws_bedrockagent_agent.reviewer_agent.id
   routing_configuration {
     agent_version = aws_bedrockagent_agent.reviewer_agent.agent_version
+  }
+  lifecycle {
+    ignore_changes = [routing_configuration]
   }
 }
 
