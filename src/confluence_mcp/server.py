@@ -5,13 +5,28 @@ from bs4 import BeautifulSoup
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+import boto3
+from botocore.exceptions import ClientError
 
 load_dotenv()
 
+def get_ssm_parameter(name: str) -> Optional[str]:
+    """Fetch a parameter from AWS SSM Parameter Store if available."""
+    try:
+        ssm = boto3.client('ssm', region_name='us-east-1')
+        response = ssm.get_parameter(Name=name, WithDecryption=True)
+        return response['Parameter']['Value']
+    except Exception:
+        # Silently fail if not in AWS or parameter missing
+        return None
+
 # Configuration
-BASE_URL = os.environ.get("CONFLUENCE_BASE_URL", "").rstrip("/")
-EMAIL = os.environ.get("CONFLUENCE_EMAIL", "")
-API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN", "")
+# Priority: 1. Environment Variable 2. SSM Parameter Store
+BASE_URL = (os.environ.get("CONFLUENCE_BASE_URL") or 
+            get_ssm_parameter("/confluence/base_url") or 
+            "").rstrip("/")
+EMAIL = os.environ.get("CONFLUENCE_EMAIL") or get_ssm_parameter("/confluence/email") or ""
+API_TOKEN = os.environ.get("CONFLUENCE_API_TOKEN") or get_ssm_parameter("/confluence/api_token") or ""
 
 # Load Configuration
 # Load Configuration

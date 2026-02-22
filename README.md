@@ -12,16 +12,15 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Get Children**: Retrieve direct child pages of a specific page. Useful for navigating the hierarchy when search is unreliable.
 - **Configurable Access Control**: Permissions are defined in `config.json`, not hardcoded.
 
-## ☁️ Phase 4: Hybrid Cloud-Local (AWS Bedrock)
+## ☁️ Phase 4: Full AWS Serverless Migration
 
-This project has been expanded to support a hybrid architecture where the AI agent is hosted in **AWS Bedrock**, while your Confluence data and credentials remain **safely on your laptop**.
+The project has transitioned to a fully native AWS serverless architecture. The MCP Server now runs as a containerized Lambda function, eliminating the need for local processes or persistent tunnels.
 
-This provides:
-- **Zero Trust**: No Atlassian credentials touch the cloud.
-- **Enterprise Scale**: Use Claude 3 series via Bedrock for advanced reasoning.
-- **Secure Access**: Communication is tunneled via Cloudflare (no VPC/Peering required).
+- **Zero Local Dependency**: Native cloud execution via AWS Lambda.
+- **IAM-Authenticated**: Secure communication using `boto3.invoke` (Internal AWS Bridge).
+- **SSM-Backed**: Secrets managed securely in AWS Parameter Store.
 
-See the [**Hybrid Cloud-Local Guide**](docs/PHASE_4_HYBRID_GUIDE.md) for setup and technical details.
+**View the detailed architecture guide:** [docs/PHASE_4_SERVERLESS_ARCHITECTURE.md](docs/PHASE_4_SERVERLESS_ARCHITECTURE.md)
 
 ## Installation
 

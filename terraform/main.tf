@@ -22,6 +22,28 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_policy" "lambda_invoke_url_policy" {
+  name = "LambdaInvokeUrlPolicy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "lambda:InvokeFunction",
+          "lambda:InvokeFunctionUrl"
+        ]
+        Resource = "*" 
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_invoke_url_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_invoke_url_policy.arn
+}
+
 # 2. Package Lambda Code
 data "archive_file" "lambda_zip" {
   type        = "zip"
@@ -41,7 +63,6 @@ resource "aws_lambda_function" "confluence_tools" {
 
   environment {
     variables = {
-      CLOUDFLARE_URL = "https://pad-airport-deck-armor.trycloudflare.com"
     }
   }
 }

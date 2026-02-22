@@ -3,20 +3,21 @@ import logging
 import os
 import urllib.request
 import urllib.error
+import boto3
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+from urllib.parse import urlparse
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# The Cloudflare URL will be provided via an environment variable assigned by Terraform
-CLOUDFLARE_URL = os.environ.get("CLOUDFLARE_URL", "http://localhost:8000")
+# The Target Lambda Function for the Cloud-Native MCP Server
+MCP_FUNCTION_NAME = "ConfluenceMCPServer"
 
 def forward_to_mcp(action_group, function, parameters):
     """
-    Forward the Bedrock Action Group request to the local Streamable HTTP MCP Server
-    via the Cloudflare tunnel.
+    Forwards the action group request to the MCP server running in another Lambda.
     """
-    # 1. Format the request into a standard JSON-RPC HTTP Payload expected by the MCP HTTP Transport
-    # Note: Streamable HTTP standard defines taking JSON-RPC directly in the body
     mcp_request = {
         "jsonrpc": "2.0",
         "id": "bedrock-invoke",
@@ -27,26 +28,48 @@ def forward_to_mcp(action_group, function, parameters):
         }
     }
     
-    req_body = json.dumps(mcp_request).encode('utf-8')
-    url = f"{CLOUDFLARE_URL}/mcp"
+    logger.info(f"Forwarding to Native MCP Lambda {MCP_FUNCTION_NAME}: {mcp_request}")
     
-    logger.info(f"Forwarding to MCP Server at {url}: {mcp_request}")
+    client = boto3.client('lambda')
     
-    req = urllib.request.Request(
-        url,
-        data=req_body,
-        headers={'Content-Type': 'application/json'}
-    )
+    # We construct a standard Lambda Payload Format 2.0 event that the Lambda Web Adapter understands
+    payload = {
+        "version": "2.0",
+        "routeKey": "$default",
+        "rawPath": "/mcp",
+        "rawQueryString": "",
+        "headers": {
+            "content-type": "application/json"
+        },
+        "requestContext": {
+            "http": {
+                "method": "POST",
+                "path": "/mcp",
+                "protocol": "HTTP/1.1"
+            }
+        },
+        "body": json.dumps(mcp_request),
+        "isBase64Encoded": False
+    }
     
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            resp_body = response.read().decode('utf-8')
-            logger.info(f"Received from MCP Server: {resp_body}")
+        response = client.invoke(
+            FunctionName=MCP_FUNCTION_NAME,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(payload)
+        )
+        
+        response_data = response['Payload'].read().decode('utf-8')
+        logger.info(f"Raw response from MCP Lambda: {response_data}")
+        
+        response_payload = json.loads(response_data)
+        
+        # Lambda Proxy responses have 'statusCode' and 'body'
+        if response_payload.get('statusCode') == 200:
+            mcp_response = json.loads(response_payload['body'])
+            logger.info(f"Successfully received response body: {mcp_response}")
             
             # The MCP Server returns a JSON-RPC response
-            # Format: {"jsonrpc": "2.0", "id": "bedrock-invoke", "result": {"content": [{"type": "text", "text": "..."}]}}
-            mcp_response = json.loads(resp_body)
-            
             if "error" in mcp_response:
                 return {"error": mcp_response["error"]}
                 
@@ -55,13 +78,13 @@ def forward_to_mcp(action_group, function, parameters):
             if content_blocks:
                 return content_blocks[0].get("text", "No text returned by tool")
             return "Execution successful but no content returned."
+        else:
+            logger.error(f"MCP Server returned error status {response_payload.get('statusCode')}: {response_payload}")
+            return f"Error: MCP Server returned status {response_payload.get('statusCode')}"
             
-    except urllib.error.URLError as e:
-        logger.error(f"HTTP Error querying MCP Server: {e}")
-        return {"error": f"Failed to connect to local MCP Server: {e}"}
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return {"error": str(e)}
+        logger.error(f"Error invoking MCP Lambda: {str(e)}")
+        return f"Error: {str(e)}"
 
 def handler(event, context):
     """Handle tool calls from Bedrock Agent"""

@@ -1,0 +1,12 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+*.log
+*.zip
+terraform/
+.terraform/
+terraform.tfstate*
+node_modules/
+.DS_Store
