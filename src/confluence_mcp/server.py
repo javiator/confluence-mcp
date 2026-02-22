@@ -100,33 +100,33 @@ def _search_confluence(query: str) -> List[Dict[str, Any]]:
     If a parent page is specified in config, all its descendants are automatically allowed.
     """
     # Build base CQL query
-    if "=" in query or " IN " in query.upper():
-        # Assume raw CQL
+    # We recognize raw CQL if it contains typical operators like =, ~, IN, OR, AND (case insensitive)
+    cql_operators = ["=", "~", " IN ", " OR ", " AND "]
+    if any(op in query or op.upper() in query.upper() for op in cql_operators):
+        # Assume raw or semi-raw CQL segment
         base_cql = f'({query}) AND type=page'
     else:
-        # Simple text search
-        base_cql = f'text~"{query}" AND type=page'
+        # Simple text search - escape quotes and wrap in text search
+        safe_query = query.replace('"', '\\"')
+        base_cql = f'text ~ "{safe_query}" AND type=page'
     
     # Build space filter
     if ALLOWED_SPACES:
         space_filter = " OR ".join([f'space = "{s}"' for s in ALLOWED_SPACES])
-        base_cql = f'{base_cql} AND ({space_filter})'
+        base_cql = f'({base_cql}) AND ({space_filter})'
     
     # Build ancestor filter for each space
-    # This allows any page that is either:
-    # 1. One of the allowed parent pages (id in (...))
-    # 2. A descendant of an allowed parent page (ancestor in (...))
     ancestor_filters = []
     for space_key, parent_ids in ALLOWED_PARENTS.items():
         if parent_ids:
-            parent_list = ", ".join(parent_ids)
+            parent_list = ", ".join([f'"{pid}"' for pid in parent_ids])
             # Match pages that are either the parent itself OR have the parent as an ancestor
             space_ancestor_filter = f'(space = "{space_key}" AND (id in ({parent_list}) OR ancestor in ({parent_list})))'
             ancestor_filters.append(space_ancestor_filter)
     
     if ancestor_filters:
         ancestor_cql = " OR ".join(ancestor_filters)
-        cql = f'{base_cql} AND ({ancestor_cql})'
+        cql = f'({base_cql}) AND ({ancestor_cql})'
     else:
         cql = base_cql
     
