@@ -89,6 +89,74 @@ def clean_html(html_content: str) -> str:
     soup = BeautifulSoup(html_content, "html.parser")
     return soup.get_text(separator="\n").strip()
 
+
+def sanitize_confluence_xhtml(body: str) -> str:
+    """
+    Auto-repair common XHTML mistakes made by LLMs before submitting to Confluence.
+    
+    Key problems fixed:
+    1. <ac:structured-macro> missing ac:name attribute -> stripped to inner text
+    2. <ac:parameter> missing ac:name attribute (e.g. <ac:parameter>bash</ac:parameter>)
+       -> converted to proper <ac:parameter ac:name="language">bash</ac:parameter>
+    3. Nested \\n literal escape sequences -> converted to proper space
+    """
+    if not body:
+        return body
+
+    soup = BeautifulSoup(body, "html.parser")
+
+    # Fix 1: <ac:parameter> tags without ac:name
+    # A bare <ac:parameter>bash</ac:parameter> is invalid — must be ac:name="language"
+    for param in soup.find_all("ac:parameter"):
+        if not param.get("ac:name"):
+            text = param.get_text(strip=True).lower()
+            # Map common bare parameter values to their correct ac:name
+            lang_map = {
+                "bash": "language", "python": "language", "java": "language",
+                "javascript": "language", "js": "language", "sql": "language",
+                "yaml": "language", "json": "language", "xml": "language",
+                "shell": "language", "sh": "language", "true": None, "false": None,
+            }
+            if text in lang_map:
+                ac_name = lang_map[text]
+                if ac_name:
+                    param["ac:name"] = ac_name
+                else:
+                    # Junk like <ac:parameter>true</ac:parameter> — remove entirely
+                    param.decompose()
+            else:
+                param["ac:name"] = "language"
+
+    # Fix 2: <ac:structured-macro> missing ac:name -> strip macro, keep inner content
+    for macro in soup.find_all("ac:structured-macro"):
+        if not macro.get("ac:name"):
+            # Try to infer what it should be from children
+            plain_body = macro.find("ac:plain-text-body")
+            rich_body = macro.find("ac:rich-text-body")
+            if plain_body:
+                # It's probably a code block — wrap in a real code macro
+                code_text = plain_body.get_text()
+                new_macro = BeautifulSoup(
+                    f'<ac:structured-macro ac:name="code">'
+                    f'<ac:parameter ac:name="language">bash</ac:parameter>'
+                    f'<ac:plain-text-body><![CDATA[{code_text}]]></ac:plain-text-body>'
+                    f'</ac:structured-macro>',
+                    "html.parser"
+                )
+                macro.replace_with(new_macro)
+            elif rich_body:
+                # It's a probably info/note — unwrap into its content
+                macro.replace_with(rich_body.decode_contents())
+            else:
+                # Unknown — just remove the broken macro tag, keep text
+                macro.replace_with(macro.get_text())
+
+    # Fix 3: Remove literal \\n escape sequences left by the LLM
+    result = str(soup)
+    result = result.replace("\\\\n", " ").replace("\\n", " ")
+
+    return result
+
 @mcp.tool()
 def search_confluence(query: str) -> List[Dict[str, Any]]:
     return _search_confluence(query)
@@ -238,7 +306,7 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
         "space": {"key": space_key},
         "body": {
             "storage": {
-                "value": body,
+                "value": sanitize_confluence_xhtml(body),
                 "representation": "storage"
             }
         },
@@ -321,7 +389,7 @@ def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
             "space": {"key": space_key},
             "body": {
                 "storage": {
-                    "value": body,
+                    "value": sanitize_confluence_xhtml(body),
                     "representation": "storage"
                 }
             },
