@@ -7,7 +7,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # We import these after load_dotenv because they read os.environ on initialization
-from confluence_mcp.server import _search_confluence, _get_confluence_page
+from confluence_mcp.server import (
+    _search_confluence, 
+    _get_confluence_page, 
+    create_confluence_page, 
+    update_confluence_page_full, 
+    prepare_confluence_page_merge_update, 
+    get_confluence_children
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +77,51 @@ async def mcp_endpoint(request: Request):
                         title = page.get("title", "Unknown Title")
                         body = page.get("textContent", "")
                         output_text = f"Title: {title}\nID: {page_id}\nURL: {page.get('url')}\n\nContent:\n{body}"
+                elif name == "create_confluence_page":
+                    res = create_confluence_page(
+                        space_key=arguments.get("space_key"),
+                        parent_id=arguments.get("parent_id"),
+                        title=arguments.get("title"),
+                        body=arguments.get("body")
+                    )
+                    if "error" in res:
+                        output_text = f"Error: {res['error']}"
+                    else:
+                        output_text = f"Page created successfully!\nID: {res.get('id')}\nURL: {res.get('url')}"
+
+                elif name == "update_confluence_page_full":
+                    res = update_confluence_page_full(
+                        page_id=arguments.get("page_id"),
+                        body=arguments.get("body")
+                    )
+                    if "error" in res:
+                        output_text = f"Error: {res['error']}"
+                    else:
+                        output_text = f"Page updated successfully!\nID: {res.get('id')}\nURL: {res.get('url')}"
+
+                elif name == "prepare_confluence_page_merge_update":
+                    res = prepare_confluence_page_merge_update(
+                        page_id=arguments.get("page_id")
+                    )
+                    if "error" in res:
+                        output_text = f"Error: {res['error']}"
+                    else:
+                        output_text = f"Page Preparation Data:\nTitle: {res.get('title')}\nVersion: {res.get('version')}\n\nCurrent Content:\n{res.get('storageContent')}"
+
+                elif name == "get_confluence_children":
+                    page_id = arguments.get("page_id")
+                    results = get_confluence_children(page_id=page_id)
+                    for item in results:
+                        if "error" in item:
+                            output_text += f"Error: {item['error']}\n"
+                            continue
+                        output_text += f"ID: {item.get('id')}\n"
+                        output_text += f"Title: {item.get('title')}\n"
+                        output_text += f"URL: {item.get('url')}\n"
+                        output_text += "-" * 40 + "\n"
+                    if not output_text:
+                        output_text = "No children found."
+
                 else:
                     output_text = f"Error: Unknown tool {name}"
                     

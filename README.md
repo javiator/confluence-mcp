@@ -22,6 +22,12 @@ The project has transitioned to a fully native AWS serverless architecture. The 
 
 **View the detailed architecture guide:** [docs/PHASE_4_SERVERLESS_ARCHITECTURE.md](docs/PHASE_4_SERVERLESS_ARCHITECTURE.md)
 
+## 🧭 Phase 4.3: Bedrock Multi-Agent System (MAS)
+
+The project now supports a sophisticated Multi-Agent System using native AWS Bedrock capabilities. This includes specialized agents for Search, Writing, and Quality Review.
+
+**View the dedicated MAS guide:** [docs/PHASE_4_3_BEDROCK_MAS.md](docs/PHASE_4_3_BEDROCK_MAS.md)
+
 ## Installation
 
 ### Option 1: Install via pip (Recommended)

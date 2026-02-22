@@ -4,22 +4,25 @@ This document describes the Phase 4 architecture, which migrated the Confluence 
 
 ## 🏗️ High-Level Architecture
 
-The system follows a "Bridge" pattern where an AWS Bedrock Agent orchestrates tools by invoking a Lambda function, which then delegates to a containerized MCP server running in another Lambda.
+The system follows a "Bridge" pattern where an orchestrator (Supervisor) manages specialized collaborators. All tools are served via a containerized MCP server running in AWS Lambda.
 
 ```mermaid
 graph TD
-    User["Chainlit User Interface"]
-    Bedrock["AWS Bedrock Agent (Anthropic Claude 3 Haiku)"]
-    Proxy["Action Group Lambda (Proxy)"]
-    Server["Confluence MCP Server (Lambda Web Adapter)"]
-    SSM["AWS SSM Parameter Store"]
-    API["Atlassian Confluence API"]
+    User["Chainlit User Interface"] --> Supervisor["Compass Supervisor Agent (Claude 3 Haiku)"]
+    
+    subgraph "Bedrock Multi-Agent System"
+        Supervisor --> Search["Search Specialist Agent"]
+        Supervisor --> Writer["Technical Writer Agent"]
+        Supervisor --> Review["Content Reviewer Agent"]
+    end
 
-    User -->|Prompts| Bedrock
-    Bedrock -->|Invokes Tool| Proxy
-    Proxy -->|boto3.invoke| Server
-    Server -->|Fetch Secrets| SSM
-    Server -->|CQL / REST Queries| API
+    Search --> Proxy["ConfluenceTools Lambda (Proxy)"]
+    Writer --> Proxy
+    Review --> Proxy
+    
+    Proxy -- "boto3.invoke (Internal)" --> Server["ConfluenceMCPServer Lambda (FastMCP)"]
+    Server --> SSM["AWS SSM Parameter Store"]
+    Server --> API["Atlassian Confluence API"]
 ```
 
 ## 🔐 Security & Authentication

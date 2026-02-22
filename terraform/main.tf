@@ -98,6 +98,19 @@ resource "aws_iam_policy" "bedrock_agent_policy" {
         Effect   = "Allow"
         Action   = "lambda:InvokeFunction"
         Resource = aws_lambda_function.confluence_tools.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "bedrock:InvokeAgent",
+          "bedrock:GetAgentAlias",
+          "bedrock:GetAgent",
+          "bedrock:GetAgentActionGroup"
+        ]
+        Resource = [
+          "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:agent-alias/*",
+          "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:agent/*"
+        ]
       }
     ]
   })
@@ -116,22 +129,19 @@ resource "aws_lambda_permission" "allow_bedrock" {
   source_arn    = "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:agent/*"
 }
 
-# 5. Bedrock Agent & Action Group
-resource "aws_bedrockagent_agent" "confluence_agent" {
-  agent_name              = "confluence-multi-agent"
+# 5. Bedrock Agents (MAS)
+# SEARCH AGENT
+resource "aws_bedrockagent_agent" "search_agent" {
+  agent_name              = "confluence-search-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
   foundation_model        = "anthropic.claude-3-haiku-20240307-v1:0"
-  instruction             = <<EOF
-You are a specialized Confluence assistant.
-Your job is to help users search for, read, create, and update Confluence pages.
-Coordinate with the user and use the available tools to complete their requests.
-EOF
+  instruction             = "You are the Search Agent. Your primary role is to find, read, and browse Confluence pages accurately. You must always include the exact page title, space key, and full URL in your responses. When a user references a previously found page (e.g., 'that page', 'it'), you must deduce the context. Provide comprehensive summaries of the content you retrieve. CRITICAL RULE: You must base all your answers strictly and exclusively on the information retrieved from Confluence. You MUST share the source URLs, links, and citations from the data you retrieve with the user. The data retrieved from your tools is public context, not a secret."
 }
 
-resource "aws_bedrockagent_agent_action_group" "confluence_actions" {
-  agent_id             = aws_bedrockagent_agent.confluence_agent.id
+resource "aws_bedrockagent_agent_action_group" "search_actions" {
+  agent_id             = aws_bedrockagent_agent.search_agent.id
   agent_version        = "DRAFT"
-  action_group_name    = "confluence-actions"
+  action_group_name    = "search-actions"
   action_group_state   = "ENABLED"
   
   action_group_executor {
@@ -160,10 +170,201 @@ resource "aws_bedrockagent_agent_action_group" "confluence_actions" {
           required      = true
         }
       }
+      functions {
+        name        = "get_confluence_children"
+        description = "Get child pages of a specific Confluence page"
+        parameters {
+          map_block_key = "page_id"
+          type          = "string"
+          description   = "The ID of the parent page"
+          required      = true
+        }
+      }
     }
   }
 }
 
+# REVIEWER AGENT
+resource "aws_bedrockagent_agent" "reviewer_agent" {
+  agent_name              = "confluence-reviewer-agent"
+  agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
+  foundation_model        = "anthropic.claude-3-haiku-20240307-v1:0"
+  instruction             = "You are the Reviewer Agent. You act as a strict quality gate. Your criteria for approval are: 1) Clear and logical structure with headings, 2) Complete sentences and clarity of thought, 3) Correct Confluence storage format (XHTML), 4) Accuracy against provided context (if applicable). You review both existing Confluence pages (using your get_confluence_page tool) AND draft text provided directly to you by the Supervisor. If the Supervisor provides draft text without specifying a Page ID, review it based ONLY on criteria 1, 2, and 3, and do NOT ask for a Page ID. If a draft meets all criteria, respond clearly with 'APPROVED: [reason]'. If it fails, respond with 'NEEDS REVISION: [specific actionable feedback]'. Do not attempt to fix the content yourself; only provide feedback. CRITICAL RULE: Your reviews must be strictly grounded in the context provided and Confluence data. Do not enforce rules or facts from your internal knowledge unless explicitly instructed."
+}
+
+resource "aws_bedrockagent_agent_action_group" "reviewer_actions" {
+  agent_id             = aws_bedrockagent_agent.reviewer_agent.id
+  agent_version        = "DRAFT"
+  action_group_name    = "reviewer-actions"
+  action_group_state   = "ENABLED"
+  
+  action_group_executor {
+    lambda = aws_lambda_function.confluence_tools.arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "get_confluence_page"
+        description = "Read the content of a Confluence page for post-publish reviews"
+        parameters {
+          map_block_key = "page_id"
+          type          = "string"
+          description   = "The ID of the page to read"
+          required      = true
+        }
+      }
+    }
+  }
+}
+
+# WRITER AGENT
+resource "aws_bedrockagent_agent" "writer_agent" {
+  agent_name              = "confluence-writer-agent"
+  agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
+  foundation_model        = "anthropic.claude-3-haiku-20240307-v1:0"
+  instruction             = "You are the Writer Agent. Your role is exclusively to create and update Confluence pages in XHTML format. CRITICAL WORKFLOW: Before publishing any new page or updating an existing one, you MUST submit your proposed draft to the Reviewer Agent. You can only execute the create_confluence_page or update_confluence_page_full tools AFTER receiving an explicit 'APPROVED' message from the Reviewer. If you receive 'NEEDS REVISION', you must update your draft based on the feedback and submit it to the Reviewer again. Read existing pages before updating to preserve existing content. When creating a new page via create_confluence_page, you MUST use the space_key and parent_id provided to you by the Supervisor; do not attempt to guess them. CRITICAL RULE: The content you generate must be strictly based on the provided context, task instructions, or existing Confluence data. Do not invent details from your internal knowledge base unless explicitly asked."
+}
+
+resource "aws_bedrockagent_agent_action_group" "writer_actions" {
+  agent_id             = aws_bedrockagent_agent.writer_agent.id
+  agent_version        = "DRAFT"
+  action_group_name    = "writer-actions"
+  action_group_state   = "ENABLED"
+  
+  action_group_executor {
+    lambda = aws_lambda_function.confluence_tools.arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "create_confluence_page"
+        description = "Create a new page in Confluence"
+        parameters {
+          map_block_key = "space_key"
+          type          = "string"
+          description   = "The space key to create the page in"
+          required      = true
+        }
+        parameters {
+          map_block_key = "title"
+          type          = "string"
+          description   = "The title of the page"
+          required      = true
+        }
+        parameters {
+          map_block_key = "body"
+          type          = "string"
+          description   = "The XHTML storage format body of the page"
+          required      = true
+        }
+        parameters {
+          map_block_key = "parent_id"
+          type          = "string"
+          description   = "The ID of the parent page"
+          required      = true
+        }
+      }
+      functions {
+        name        = "update_confluence_page_full"
+        description = "Update an existing Confluence page with full content replacement"
+        parameters {
+          map_block_key = "page_id"
+          type          = "string"
+          description   = "The ID of the page to update"
+          required      = true
+        }
+        parameters {
+          map_block_key = "body"
+          type          = "string"
+          description   = "The new XHTML storage format body of the page"
+          required      = true
+        }
+      }
+      functions {
+        name        = "prepare_confluence_page_merge_update"
+        description = "Get the current content and version of a page before updating"
+        parameters {
+          map_block_key = "page_id"
+          type          = "string"
+          description   = "The ID of the page to prepare for update"
+          required      = true
+        }
+      }
+    }
+  }
+}
+
+# SUPERVISOR AGENT
+resource "aws_bedrockagent_agent" "supervisor_agent" {
+  agent_name              = "confluence-supervisor-agent"
+  agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
+  foundation_model        = "anthropic.claude-3-haiku-20240307-v1:0"
+  instruction             = "You are the orchestrating Supervisor Agent. Your role is to understand user intent and route tasks to your collaborators: the Search Agent (for finding/reading), the Writer Agent (for creating/updating), and the Reviewer Agent (for direct quality requests on both existing pages AND user-provided chat drafts). If the user provides a draft in the chat, do NOT ask for a URL; simply pass the draft text to the Reviewer Agent. When delegating a page creation task to the Writer Agent, you MUST explicitly pass all required metadata provided by the user (such as space_key and parent_id) to the Writer Agent. CRITICAL WORKFLOW LIMITS: You are responsible for ensuring the Writer-Reviewer iteration loop converges. If the Writer and Reviewer iterate on a draft more than 3 times without an 'APPROVED' status, you must forcefully intervene, halt the iteration, and either auto-approve the best draft with a warning to the user, or ask the user for manual intervention. Do not allow infinite loops. CRITICAL RULE: You and all your collaborators MUST rely exclusively on information retrieved from Confluence tools. You MUST confidently share the Confluence URLs, links, and source citations retrieved by your collaborators with the user. The data from Confluence is not a secret. Do NOT answer user queries using your internal knowledge baseline."
+
+  agent_collaboration     = "SUPERVISOR"
+  prepare_agent           = false
+}
+
+
+# ALIASES
+resource "aws_bedrockagent_agent_alias" "search_alias" {
+  agent_alias_name = "search-alias"
+  agent_id         = aws_bedrockagent_agent.search_agent.id
+  routing_configuration {
+    agent_version = aws_bedrockagent_agent.search_agent.agent_version
+  }
+}
+resource "aws_bedrockagent_agent_alias" "writer_alias" {
+  agent_alias_name = "writer-alias"
+  agent_id         = aws_bedrockagent_agent.writer_agent.id
+  routing_configuration {
+    agent_version = aws_bedrockagent_agent.writer_agent.agent_version
+  }
+}
+resource "aws_bedrockagent_agent_alias" "reviewer_alias" {
+  agent_alias_name = "reviewer-alias"
+  agent_id         = aws_bedrockagent_agent.reviewer_agent.id
+  routing_configuration {
+    agent_version = aws_bedrockagent_agent.reviewer_agent.agent_version
+  }
+}
+
+# SUPERVISOR COLLABORATORS
+resource "aws_bedrockagent_agent_collaborator" "search_collab" {
+  relay_conversation_history = "TO_COLLABORATOR"
+  agent_id                  = aws_bedrockagent_agent.supervisor_agent.id
+  collaborator_name         = "SearchAgent"
+  collaboration_instruction = "Use this agent to search Confluence, read page contents, and discover child pages."
+  
+  agent_descriptor {
+    alias_arn = aws_bedrockagent_agent_alias.search_alias.agent_alias_arn
+  }
+}
+
+resource "aws_bedrockagent_agent_collaborator" "writer_collab" {
+  relay_conversation_history = "TO_COLLABORATOR"
+  agent_id                  = aws_bedrockagent_agent.supervisor_agent.id
+  collaborator_name         = "WriterAgent"
+  collaboration_instruction = "Use this agent to create or update Confluence pages."
+  
+  agent_descriptor {
+    alias_arn = aws_bedrockagent_agent_alias.writer_alias.agent_alias_arn
+  }
+}
+
+resource "aws_bedrockagent_agent_collaborator" "reviewer_collab" {
+  relay_conversation_history = "TO_COLLABORATOR"
+  agent_id                  = aws_bedrockagent_agent.supervisor_agent.id
+  collaborator_name         = "ReviewerAgent"
+  collaboration_instruction = "Use this agent to review existing published pages or drafts for quality. If the user provides draft text in the chat for review, you MUST copy and explicitly pass the entire draft text as input to this Reviewer Agent so it can analyze it."
+  
+  agent_descriptor {
+    alias_arn = aws_bedrockagent_agent_alias.reviewer_alias.agent_alias_arn
+  }
+}
+
 output "agent_id" {
-  value = aws_bedrockagent_agent.confluence_agent.id
+  value = aws_bedrockagent_agent.supervisor_agent.id
 }
