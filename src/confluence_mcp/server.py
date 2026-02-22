@@ -89,12 +89,29 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
     """
     Repair broken Confluence XHTML macros using regex to preserve CDATA and formatting.
     Fixes the common issue where LLMs omit 'ac:name' or 'ac:name' on parameters.
+    Also strips Confluence-generated 'invalidmacro' placeholders.
     """
     if not body:
         return body
 
+    # Fix 0: Strip Confluence-generated 'invalidmacro' placeholders COMPLETELY
+    # These look like <ac:structured-macro ac:name="invalidmacro" ... />
+    body = re.sub(
+        r'<ac:structured-macro ac:name="invalidmacro"[^>]*/>',
+        '',
+        body
+    )
+    # Also handle the paired form just in case
+    body = re.sub(
+        r'<ac:structured-macro ac:name="invalidmacro"[^>]*>.*?</ac:structured-macro>',
+        '',
+        body,
+        flags=re.DOTALL
+    )
+
     # Fix 1: <ac:parameter> missing ac:name
     # Converts <ac:parameter>bash</ac:parameter> to <ac:parameter ac:name="language">bash</ac:parameter>
+    # Only if it doesn't already have one
     body = re.sub(
         r'<ac:parameter>(.*?)</ac:parameter>',
         r'<ac:parameter ac:name="language">\1</ac:parameter>',
@@ -102,25 +119,27 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
     )
 
     # Fix 2: <ac:structured-macro> missing ac:name
-    # We look for macros that don't have ac:name and try to guess based on body type
     def repair_macro(match):
-        full_tag = match.group(0)
+        start_tag = match.group(1)
         inner_content = match.group(2)
+        end_tag = match.group(3)
         
-        if 'ac:name=' in full_tag:
-            return full_tag
+        if 'ac:name=' in start_tag:
+            return match.group(0)
             
         # Guess name based on inner body tag
         if '<ac:plain-text-body' in inner_content:
-            return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="code"')
+            new_start = start_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="code"')
         elif '<ac:rich-text-body' in inner_content:
-            return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
-        
-        # Default fallback to info if we can't tell
-        return full_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
+            new_start = start_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
+        else:
+            # Default fallback to info if we can't tell
+            new_start = start_tag.replace('<ac:structured-macro', '<ac:structured-macro ac:name="info"')
+            
+        return f"{new_start}{inner_content}{end_tag}"
 
     # Match <ac:structured-macro ...> ... </ac:structured-macro>
-    # Note: This regex is simple and doesn't handle nested macros perfectly, but agent output is usually flat.
+    # Note: Using non-greedy match for inner content to avoid capturing multiple macros at once
     body = re.sub(
         r'(<ac:structured-macro[^>]*>)(.*?)(</ac:structured-macro>)',
         repair_macro,
@@ -426,6 +445,8 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
             return {"error": "Page does not have required 'ai-generated' or 'ai-managed' labels."}
             
         body_html = data.get("body", {}).get("storage", {}).get("value", "")
+        # Sanitize the content we return to the agent to remove "zombie" errors
+        sanitized_body = robust_sanitize_confluence_xhtml(body_html)
         
         return {
             "id": data.get("id"),
@@ -434,8 +455,8 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
             "url": f"{BASE_URL}{data.get('_links', {}).get('webui', '')}",
             "labels": labels,
             "version": data.get("version", {}).get("number"),
-            "textContent": clean_html(body_html),
-            "storageContent": body_html
+            "textContent": clean_html(sanitized_body),
+            "storageContent": sanitized_body
         }
         
     except requests.RequestException as e:
