@@ -12,6 +12,17 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Get Children**: Retrieve direct child pages of a specific page. Useful for navigating the hierarchy when search is unreliable.
 - **Configurable Access Control**: Permissions are defined in `config.json`, not hardcoded.
 
+## ☁️ Phase 4: Hybrid Cloud-Local (AWS Bedrock)
+
+This project has been expanded to support a hybrid architecture where the AI agent is hosted in **AWS Bedrock**, while your Confluence data and credentials remain **safely on your laptop**.
+
+This provides:
+- **Zero Trust**: No Atlassian credentials touch the cloud.
+- **Enterprise Scale**: Use Claude 3 series via Bedrock for advanced reasoning.
+- **Secure Access**: Communication is tunneled via Cloudflare (no VPC/Peering required).
+
+See the [**Hybrid Cloud-Local Guide**](docs/PHASE_4_HYBRID_GUIDE.md) for setup and technical details.
+
 ## Installation
 
 ### Option 1: Install via pip (Recommended)

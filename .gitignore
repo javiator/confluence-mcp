@@ -7,3 +7,14 @@ config.json
 dist/
 build/
 *.egg-info/
+*.log
+*.json
+!config.json
+!pyproject.toml
+lambda_output.json
+response.json
+test_*.json
+test_*.py
+!test_bedrock.py
+.terraform/
+terraform.tfstate*

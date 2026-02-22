@@ -11,11 +11,14 @@ from confluence_mcp.agent.client import MCPClient
 from confluence_mcp.agent.graph import create_graph
 from confluence_mcp.agent.memory import MemoryStore
 
+import boto3
+
 AGENT_LABELS = {
     "search":   "🔍 Search Agent",
     "writer":   "✍️  Writer Agent",
     "reviewer": "🔎 Reviewer Agent",
     "supervisor": "🧭 Supervisor",
+    "bedrock":  "☁️ Bedrock Agent"
 }
 
 # Global MCP Client removed to prevent shared state issues
@@ -50,25 +53,20 @@ async def set_starters():
 
 async def _initialize_session(resume_history=None):
     """Common initialization logic for new and resumed chats."""
-    # 1. Connect to MCP Server (Session Scoped)
-    mcp_client = MCPClient()
-    try:
-        await mcp_client.connect()
-        cl.user_session.set("mcp_client", mcp_client)
-    except Exception as e:
-        await cl.Message(content=f"Failed to connect to MCP Server: {e}").send()
-        return False
+    # 1. Provide a warning that Local MCP is bypassed for Bedrock
+    # (The local MCP client is not needed since Bedrock calls the URL directly)
+    cl.user_session.set("mcp_client", None)
 
     # 2. Get User Settings (Model Selection)
     provider = os.environ.get("LLM_PROVIDER", "openai")
     model = os.environ.get("LLM_MODEL", "gpt-4o")
 
-    # 3. Initialize Graph
-    graph = create_graph(mcp_client, provider, model)
-    cl.user_session.set("graph", graph)
+    # 3. Initialize Bedrock Client
+    bedrock_client = boto3.client('bedrock-agent-runtime', region_name='us-east-1')
+    cl.user_session.set("bedrock_client", bedrock_client)
 
     # Store provider/model info for later use
-    cl.user_session.set("llm_info", f"{provider}/{model}")
+    cl.user_session.set("llm_info", f"AWS_Bedrock/Claude-3-Haiku")
 
     # 4. Phase 2: Initialize Memory & Session
     memory_store = MemoryStore()
@@ -164,106 +162,64 @@ async def on_message(message: cl.Message):
     cl.user_session.set("history", history)
 
     # ---------------------------------------------------------
-    # Phase 3: CREWAI EXECUTION PATH
+    # Phase 4: AWS BEDROCK EXECUTION PATH
     # ---------------------------------------------------------
     try:
-        from confluence_mcp.agent.frameworks.crewai_impl import create_confluence_crew
-        from crewai import Task
+        bedrock_client = cl.user_session.get("bedrock_client")
+        session_id = cl.user_session.get("session_id")
         
-        mcp_client = cl.user_session.get("mcp_client")
-        provider = os.environ.get("LLM_PROVIDER", "openai")
-        model = os.environ.get("LLM_MODEL", "gpt-4o")
+        # Hardcoding the Agent ID we deployed via Terraform
+        # In a real app, this might come from an env var
+        AGENT_ID = "N2YKHR0RUU"
+        AGENT_ALIAS_ID = "TSTALIASID" # Default alias for DRAFT version
         
-        # Get the current event loop for thread-safe cross-loop communication
-        loop = asyncio.get_running_loop()
-
-        # Re-instantiate agents from factory
-        crew_components = create_confluence_crew(mcp_client, provider, model, loop=loop)
-        search_agent = crew_components["search_agent"]
-        writer_agent = crew_components["writer_agent"]
-        reviewer_agent = crew_components["reviewer_agent"]
-
-        # 1. Format conversation history for context
-        # We take the last 6 messages to keep the context window management simple
-        def format_history(messages, limit=6):
-            formatted = []
-            for msg in messages[-limit:]:
-                role = "User" if isinstance(msg, HumanMessage) else "Assistant"
-                formatted.append(f"{role}: {msg.content}")
-            return "\n".join(formatted)
-        
-        chat_context = format_history(history)
-        context_prompt = f"\n\nConversation Context:\n{chat_context}" if chat_context else ""
-
-        # ---------------------------------------------------------
-        # Phase 3: CREWAI EXECUTION PATH WITH CALLBACKS
-        # ---------------------------------------------------------
-        from crewai import Crew, Process, Task
-        
-        # Dynamic task mapping based on simple heuristics since CrewAI
-        # needs explicit tasks. In production, a Router Agent would do this.
-        user_input = message.content.lower()
-        tasks = []
-
-        if any(word in user_input for word in ["create", "update", "write", "draft"]):
-            # Write + Review flow
-            write_task = Task(
-                description=f'Fulfill this user request to write/update documentation: "{message.content}"{context_prompt}',
-                agent=writer_agent,
-                expected_output='Properly formatted Confluence XHTML content, drafted or published.'
-            )
-            review_task = Task(
-                description=f'Review the drafted content from the writer. If it needs fixing, explain what must change. If it is good, approve it.{context_prompt}',
-                agent=reviewer_agent,
-                expected_output='A review summary: APPROVED or NEEDS REVISION.',
-                context=[write_task]
-            )
-            tasks = [write_task, review_task]
-        else:
-            # Default to Search
-            search_task = Task(
-                description=f'Find information to answer this user query: "{message.content}"{context_prompt}',
-                agent=search_agent,
-                expected_output='A summary of findings with Confluence page titles and URLs.'
-            )
-            tasks = [search_task]
-
-        def crew_step_callback(step_output):
-            """Callback from CrewAI worker thread to update Chainlit UI"""
-            try:
-                # step_output can be AgentAction or AgentFinish
-                agent_name = getattr(step_output, 'agent', 'System')
-                tool_used = getattr(step_output, 'tool', 'Thinking...')
-                
-                cl.run_sync(cl.Message(
-                    content=f"⚙️ **{agent_name}** is working...\n"
-                            f"Action: {tool_used}",
-                    author="CrewAI"
-                ).send())
-            except Exception:
-                pass
-
-        active_crew = Crew(
-            agents=[search_agent, writer_agent, reviewer_agent],
-            tasks=tasks,
-            process=Process.sequential,
-            verbose=True,
-            step_callback=crew_step_callback
-        )
-
-        # CrewAI execution is synchronous, so we run it in a thread to not block Chainlit UI
-        result = await cl.make_async(active_crew.kickoff)()
-
-        # Final cleanup and display - Send a FRESH message so it's at the bottom
-        msg = cl.Message(content=str(result.raw), author="CrewAI Agent")
+        # We need a separate message to update during streaming
+        msg = cl.Message(content="", author="Bedrock Agent")
         await msg.send()
         
-        # Update history with the result
-        history.append(AIMessage(content=msg.content))
+        # Invoke the Bedrock Agent
+        # Because boto3 is synchronous, we run it in a thread to keep UI responsive
+        def invoke_agent():
+            return bedrock_client.invoke_agent(
+                agentId=AGENT_ID,
+                agentAliasId=AGENT_ALIAS_ID,
+                sessionId=session_id,
+                inputText=message.content,
+            )
+            
+        response = await cl.make_async(invoke_agent)()
+        
+        completion = ""
+        # The response is an event stream
+        for event in response.get("completion"):
+            # Check if this event contains a chunk of text
+            if "chunk" in event:
+                chunk_data = event["chunk"].get("bytes")
+                if chunk_data:
+                    chunk_str = chunk_data.decode("utf-8")
+                    completion += chunk_str
+                    await msg.stream_token(chunk_str)
+            
+            # Optionally: we could trace the orchestrator events here to show
+            # when Bedrock is calling the Lambda tool!
+            elif "trace" in event:
+                trace_obj = event["trace"].get("trace", {})
+                if "orchestrationTrace" in trace_obj:
+                    orch_trace = trace_obj["orchestrationTrace"]
+                    if "invocationInput" in orch_trace:
+                        tool_name = orch_trace["invocationInput"].get("actionGroupInvocationInput", {}).get("function")
+                        if tool_name:
+                            # Show a temporary status in Chainlit
+                            asyncio.create_task(
+                                cl.Message(content=f"🛠️ Tool call: `{tool_name}`", author="System").send()
+                            )
+
+        # Update history with the final result
+        history.append(AIMessage(content=completion))
         cl.user_session.set("history", history)
         
     except Exception as e:
-        await cl.Message(content=f"Error executing CrewAI: {str(e)}").send()
+        await cl.Message(content=f"Error executing AWS Bedrock Agent: {str(e)}").send()
         return
 
     # Phase 2: Save conversation to memory after each exchange

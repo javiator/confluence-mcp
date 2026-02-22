@@ -6,11 +6,11 @@
 
 ## 🎯 Current Status
 
-**Current Phase**: Phase 3 - Experiment: CrewAI ✅ COMPLETE
-**Current Branch**: `claude/phase-3-ceArC`
-**Started**: 2026-02-20
-**Completed**: 2026-02-20
-**Status**: 🟢 Complete - Framework evaluation finished
+**Current Phase**: Phase 4 - Experiment: AWS Bedrock 🟡 In Progress
+**Current Branch**: `claude/phase-4-ceArC`
+**Started**: 2026-02-21
+**Completed**: 
+**Status**: 🟡 In Progress - Environment and tracking setup
 
 ---
 
@@ -22,7 +22,7 @@
 | **Phase 1** | First Multi-Agent (LangGraph) | 1 week | 🟢 Complete | `claude/phase-1-ceArC` | 13/13 tests passing |
 | **Phase 2** | Intelligence & Memory | 1 day | 🟢 Complete | `claude/phase-2-ceArC` | 12/12 tests passing |
 | **Phase 3** | Experiment: CrewAI | 1 day | 🟢 Complete | `claude/phase-3-ceArC` | Role-based agents working |
-| **Phase 4** | Experiment: AWS Bedrock | 1 week | ⚪ Pending | `claude/phase-4-ceArC` | |
+| **Phase 4** | Experiment: AWS Bedrock | 1 week | 🟡 In Progress | `claude/phase-4-ceArC` | Setting up Bedrock Agent |
 | **Phase 5** | Experiment: Google Vertex | 1 week | ⚪ Pending | `claude/phase-5-ceArC` | |
 | **Phase 6** | Framework Decision | 2-3 days | ⚪ Pending | `claude/phase-6-ceArC` | |
 | **Phase 7** | Production Build | 2 weeks | ⚪ Pending | `claude/phase-7-ceArC` | |
@@ -103,6 +103,29 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 - [x] UI shows real-time progress steps ✅
 - [x] Agents remember user context (name, history) ✅
 - [x] Comparison document finalized ✅
+
+---
+
+### Phase 4: Experiment: AWS Bedrock 🟡 In Progress
+
+**Objective**: Try managed service approach, understand cloud-native multi-agent
+
+**Tasks**:
+- [x] Set up AWS Bedrock Agents (Infrastructure as Code)
+- [x] Create Lambda functions for tools (MCP to Lambda bridge)
+- [ ] Deploy and test Bedrock Agent
+- [ ] Compare with local frameworks (LangGraph, CrewAI)
+
+**Key Deliverables**:
+1. Deployed AWS Bedrock Agent
+2. Lambda-based tool implementation
+3. Cost analysis
+4. Comparison document
+
+**When to Consider Complete**:
+- [ ] Agent completes full search → write → review cycle via AWS Bedrock
+- [ ] Lambda functions successfully bridge to MCP Server Logic
+- [ ] Comparison document finalized
 
 ## 🎓 Learning Log
 

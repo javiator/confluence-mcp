@@ -4,6 +4,9 @@ import requests
 from bs4 import BeautifulSoup
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration
 BASE_URL = os.environ.get("CONFLUENCE_BASE_URL", "").rstrip("/")
@@ -73,6 +76,9 @@ def clean_html(html_content: str) -> str:
 
 @mcp.tool()
 def search_confluence(query: str) -> List[Dict[str, Any]]:
+    return _search_confluence(query)
+
+def _search_confluence(query: str) -> List[Dict[str, Any]]:
     """
     Search for Confluence pages using CQL.
     Returns pages only from allowed spaces and within allowed parent hierarchies.
@@ -162,6 +168,9 @@ def search_confluence(query: str) -> List[Dict[str, Any]]:
 
 @mcp.tool()
 def get_confluence_page(page_id: str) -> Dict[str, Any]:
+    return _get_confluence_page(page_id)
+
+def _get_confluence_page(page_id: str) -> Dict[str, Any]:
     """
     Get a Confluence page by ID, returning plain text content.
     """
