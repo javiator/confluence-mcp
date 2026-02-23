@@ -10,6 +10,9 @@ from botocore.exceptions import ClientError
 
 load_dotenv()
 
+# In-memory cache for prepared page content (for Bedrock Agent workflow)
+_prepared_pages_cache: Dict[str, Dict[str, Any]] = {}
+
 def get_ssm_parameter(name: str) -> Optional[str]:
     """Fetch a parameter from AWS SSM Parameter Store if available."""
     try:
@@ -102,9 +105,88 @@ def clean_html(html_content: str) -> str:
     except Exception:
         return html_content # Fallback to raw if parsing fails
 
+def convert_wiki_markup_to_xhtml(body: str) -> str:
+    """
+    Convert Confluence Wiki Markup to storage format XHTML.
+    Handles common patterns: h1-h6 headings, code blocks, lists.
+    """
+    if not body:
+        return body
+
+    # Strip outer <p> tags if they're wrapping Wiki markup
+    stripped = body.strip()
+    if stripped.startswith('<p>') and stripped.endswith('</p>'):
+        inner = stripped[3:-4]  # Remove <p> and </p>
+        # Check if inner content looks like Wiki markup
+        if re.match(r'^h[1-6]\.', inner.strip()) or '{code' in inner:
+            body = inner
+
+    # Check if it's already proper XHTML (has proper heading or ac: tags)
+    if '<h1>' in body or '<h2>' in body or '<ac:' in body:
+        return body
+
+    lines = body.split('\n')
+    output = []
+    in_code_block = False
+    code_lang = None
+    code_content = []
+
+    for line in lines:
+        # Code block end: {code} - check this FIRST before checking for start
+        if in_code_block and line.strip() == '{code}':
+            in_code_block = False
+            # Build proper XHTML code macro with CDATA
+            code_str = '\n'.join(code_content)
+            code_xml = f'<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">{code_lang}</ac:parameter><ac:plain-text-body><![CDATA[{code_str}]]></ac:plain-text-body></ac:structured-macro>'
+            output.append(code_xml)
+            continue
+
+        # Code block start: {code:lang} or {code}
+        if line.strip().startswith('{code'):
+            in_code_block = True
+            # Extract language if specified
+            match = re.match(r'\{code:(\w+)\}', line.strip())
+            code_lang = match.group(1) if match else 'none'
+            code_content = []
+            continue
+
+        if in_code_block:
+            code_content.append(line)
+            continue
+
+        # Headings: h1. h2. h3. etc
+        heading_match = re.match(r'^h([1-6])\.\s+(.+)$', line.strip())
+        if heading_match:
+            level = heading_match.group(1)
+            text = heading_match.group(2)
+            output.append(f'<h{level}>{text}</h{level}>')
+            continue
+
+        # Bullet list: * item
+        if line.strip().startswith('* '):
+            text = line.strip()[2:]
+            output.append(f'<ul><li>{text}</li></ul>')
+            continue
+
+        # Numbered list: # item
+        if line.strip().startswith('# '):
+            text = line.strip()[2:]
+            output.append(f'<ol><li>{text}</li></ol>')
+            continue
+
+        # Plain paragraph
+        if line.strip():
+            output.append(f'<p>{line.strip()}</p>')
+
+    return ''.join(output)
+
+
 def robust_sanitize_confluence_xhtml(body: str) -> str:
     if not body:
         return body
+
+    # First, try to convert Wiki markup to XHTML if needed
+    body = convert_wiki_markup_to_xhtml(body)
 
     # Fix 0: Strip Confluence-generated 'invalidmacro' placeholders COMPLETELY
     body = re.sub(
@@ -346,9 +428,23 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
 @mcp.tool()
 def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
     """
-    Overwrite a Confluence page's body. 
+    Update a Confluence page. If prepare_confluence_page_merge_update was called first,
+    this will merge the new body with the cached existing content. Otherwise, it replaces the page entirely.
     Only allowed if the page is in an allowed space and has 'ai-generated' or 'ai-managed' labels.
     """
+    # Check if there's cached content from prepare_confluence_page_merge_update
+    cached_data = _prepared_pages_cache.get(page_id)
+
+    if cached_data:
+        # Merge workflow: combine cached existing content with new content
+        existing_content = cached_data.get("storageContent", "")
+        merged_body = existing_content + "\n" + body
+        # Clear cache after use
+        del _prepared_pages_cache[page_id]
+    else:
+        # Direct replacement workflow (no prepare step)
+        merged_body = body
+
     # 1. Fetch current info to check permissions and get version
     url_get = f"{BASE_URL}/rest/api/content/{page_id}"
     params = {"expand": "body.storage,space,version,metadata.labels"}
@@ -397,12 +493,15 @@ def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
             "space": {"key": space_key},
             "body": {
                 "storage": {
-                    "value": robust_sanitize_confluence_xhtml(body),
+                    "value": robust_sanitize_confluence_xhtml(merged_body),
                     "representation": "storage"
                 }
             },
             "version": {
                 "number": current_version + 1
+            },
+            "metadata": {
+                "labels": [{"prefix": "global", "name": l} for l in labels]
             }
         }
         
@@ -423,6 +522,72 @@ def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
             "url": f"{BASE_URL}{data.get('_links', {}).get('webui', '')}"
         }
         
+    except requests.RequestException as e:
+        return {"error": str(e)}
+
+@mcp.tool()
+def append_confluence_page(page_id: str, new_content: str) -> Dict[str, Any]:
+    """
+    Append new content to the bottom of an existing Confluence page.
+    Use this instead of update_confluence_page_full when you only want to ADD new sections
+    without replacing existing content. Provide ONLY the new section(s) as new_content.
+    Only allowed if the page has 'ai-generated' or 'ai-managed' labels.
+    """
+    url_get = f"{BASE_URL}/rest/api/content/{page_id}"
+    params = {"expand": "body.storage,space,version,metadata.labels"}
+
+    try:
+        response = requests.get(url_get, auth=get_auth(), params=params, headers=get_headers())
+        response.raise_for_status()
+        data = response.json()
+
+        space_key = data.get("space", {}).get("key")
+        if space_key not in ALLOWED_SPACES:
+            return {"error": f"Space '{space_key}' is not in the allowed list."}
+
+        labels_data = data.get("metadata", {}).get("labels", {}).get("results", [])
+        if isinstance(data.get("metadata", {}).get("labels"), list):
+            labels_data = data.get("metadata", {}).get("labels")
+
+        labels = []
+        for l in labels_data:
+            if isinstance(l, dict):
+                labels.append(l.get("name"))
+            elif isinstance(l, str):
+                labels.append(l)
+
+        if "ai-generated" not in labels and "ai-managed" not in labels:
+            return {"error": "Page does not have required 'ai-generated' or 'ai-managed' labels."}
+
+        current_version = data.get("version", {}).get("number", 1)
+        current_title = data.get("title")
+        current_body = data.get("body", {}).get("storage", {}).get("value", "")
+
+        # Sanitize and merge
+        sanitized_new = robust_sanitize_confluence_xhtml(new_content)
+        merged_body = current_body + "\n" + sanitized_new
+
+        payload = {
+            "id": page_id,
+            "type": "page",
+            "title": current_title,
+            "space": {"key": space_key},
+            "body": {"storage": {"value": merged_body, "representation": "storage"}},
+            "version": {"number": current_version + 1},
+            "metadata": {"labels": [{"prefix": "global", "name": l} for l in labels]}
+        }
+
+        url_put = f"{BASE_URL}/rest/api/content/{page_id}"
+        resp_put = requests.put(url_put, auth=get_auth(), json=payload, headers=get_headers())
+        resp_put.raise_for_status()
+        result = resp_put.json()
+
+        return {
+            "id": result.get("id"),
+            "message": "Content appended successfully!",
+            "url": f"{BASE_URL}{result.get('_links', {}).get('webui', '')}"
+        }
+
     except requests.RequestException as e:
         return {"error": str(e)}
 
@@ -450,28 +615,43 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
         if space_key not in ALLOWED_SPACES:
             return {"error": f"Page in space '{space_key}' cannot be prepared for merge (space not allowed)."}
             
-        labels_raw = data.get("metadata", {}).get("labels", [])
-        if isinstance(labels_raw, str):
-             # Handle case where labels expansion might return a string or truncated data
-             labels = []
-        else:
-             labels = [l.get("name") if isinstance(l, dict) else str(l) for l in labels_raw]
+        # Robust label extraction
+        labels_data = data.get("metadata", {}).get("labels", {}).get("results", [])
+        if isinstance(data.get("metadata", {}).get("labels"), list):
+             labels_data = data.get("metadata", {}).get("labels")
+             
+        labels = []
+        for l in labels_data:
+            if isinstance(l, dict):
+                labels.append(l.get("name"))
+            elif isinstance(l, str):
+                labels.append(l)
+
         if "ai-generated" not in labels and "ai-managed" not in labels:
             return {"error": "Page does not have required 'ai-generated' or 'ai-managed' labels."}
             
         body_html = data.get("body", {}).get("storage", {}).get("value", "")
         # Sanitize the content we return to the agent to remove "zombie" errors
         sanitized_body = robust_sanitize_confluence_xhtml(body_html)
-        
-        return {
+
+        # Cache the full content server-side to avoid passing large XML between tool calls
+        _prepared_pages_cache[page_id] = {
             "id": data.get("id"),
             "title": data.get("title"),
             "spaceKey": space_key,
             "url": f"{BASE_URL}{data.get('_links', {}).get('webui', '')}",
             "labels": labels,
             "version": data.get("version", {}).get("number"),
-            "textContent": clean_html(sanitized_body),
             "storageContent": sanitized_body
+        }
+
+        # Return minimal metadata to the agent (NOT the full content)
+        return {
+            "status": "prepared",
+            "page_id": page_id,
+            "title": data.get("title"),
+            "version": data.get("version", {}).get("number"),
+            "message": f"Page {page_id} prepared for update. Content cached server-side. You can now call update_confluence_page_full with your new merged content."
         }
         
     except requests.RequestException as e:

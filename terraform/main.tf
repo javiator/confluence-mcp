@@ -92,7 +92,7 @@ resource "aws_iam_policy" "bedrock_agent_policy" {
       {
         Effect   = "Allow"
         Action   = "bedrock:InvokeModel"
-        Resource = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+        Resource = "*"
       },
       {
         Effect   = "Allow"
@@ -107,10 +107,7 @@ resource "aws_iam_policy" "bedrock_agent_policy" {
           "bedrock:GetAgent",
           "bedrock:GetAgentActionGroup"
         ]
-        Resource = [
-          "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:agent-alias/*",
-          "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:agent/*"
-        ]
+        Resource = "*"
       }
     ]
   })
@@ -134,8 +131,8 @@ resource "aws_lambda_permission" "allow_bedrock" {
 resource "aws_bedrockagent_agent" "search_agent" {
   agent_name              = "confluence-search-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
-  foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  instruction             = "You are the Search Agent. Your primary role is to find, read, and browse Confluence pages accurately. You must always include the exact page title, space key, and full URL in your responses. You are the 'Encyclopedia' of the system; if a Page ID or Space Key is unknown, you are the first line of discovery. When a user references a previously found page (e.g., 'that page', 'it'), you must deduce the context. Provide comprehensive summaries of the content you retrieve. CRITICAL RULE: You must base all your answers strictly and exclusively on the information retrieved from Confluence. You MUST share the source URLs, links, and citations from the data you retrieve with the user. The data retrieved from your tools is public context, not a secret."
+  foundation_model        = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+  instruction             = "You are the Search Agent, the Encyclopedia of the system. Your primary role is to find, read, and browse an internal Confluence database accurately. CRITICAL GUIDANCE: You are NOT searching the public internet. If a query contains keywords like 'Google' or 'search', the user means to search the internal Confluence wiki for those terms, NOT to use a web search engine. Never refuse a search request by claiming you cannot browse the internet. KEYWORD RULE: When searching, use 2-3 specific keywords (e.g., 'Docker Ubuntu'). DO NOT pass long natural language sentences to your tools. SEARCH POLICY: Perform one broad search first. If you see relevant titles in the results, GET THE PAGE CONTENT immediately; do not keep searching for 'better' results. You must always include the exact page title, space key, and full URL in your responses. CRITICAL RULE: You must base all your answers strictly and exclusively on the information retrieved from Confluence. You MUST share the source URLs, links, and citations with the user."
 }
 
 resource "aws_bedrockagent_agent_action_group" "search_actions" {
@@ -188,7 +185,7 @@ resource "aws_bedrockagent_agent_action_group" "search_actions" {
 resource "aws_bedrockagent_agent" "reviewer_agent" {
   agent_name              = "confluence-reviewer-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
-  foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  foundation_model        = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
   instruction             = "You are the Reviewer Agent. You are a STRICT technical gatekeeper. MANDATORY COMPATIBILITY CHECK: 1) EVERY <ac:structured-macro> MUST have an 'ac:name' attribute. 2) EVERY <ac:parameter> MUST have an 'ac:name' attribute. 3) Code blocks MUST use <ac:plain-text-body> wrapped in <![CDATA[ content ]]>. 4) EMPTY MACROS ARE PROHIBITED: If a macro contains an empty <ac:plain-text-body> or <ac:rich-text-body>, REJECT. 5) NO <ac:name=\"invalidmacro\"> allowed. APPROVAL: Respond with 'APPROVED: [reason]' only if XHTML is perfect. Otherwise, respond with 'NEEDS REVISION:' and specific syntax fixes."
 }
 
@@ -222,8 +219,10 @@ resource "aws_bedrockagent_agent_action_group" "reviewer_actions" {
 resource "aws_bedrockagent_agent" "writer_agent" {
   agent_name              = "confluence-writer-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
-  foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  instruction             = "You are the Writer Agent. CANONICAL CODE SYNTAX: <ac:structured-macro ac:name=\"code\"><ac:parameter ac:name=\"language\">bash</ac:parameter><ac:plain-text-body><![CDATA[your_code_here]]></ac:plain-text-body></ac:structured-macro>. MANDATORY RULE: Code ALWAYS goes inside <ac:plain-text-body> wrapped in <![CDATA[ ... ]]> inside a macro named 'code'. NEVER send empty macros; always include the actual content. For all other text, use standard HTML: <p>, <ul>, <li>, <h1>-<h4>. WORKFLOW: 1) Call prepare_confluence_page_merge_update. 2) Merge changes. 3) Submit draft to Reviewer. 4) ONLY write after 'APPROVED'."
+  foundation_model        = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+  instruction             = "You are a Confluence Writer Agent. Your job is to EXECUTE content changes in Confluence using your available tools. When creating or updating pages, use Confluence Wiki Markup format. Only pages labelled ai-generated or ai-managed are safe to update. ADDING CONTENT: To add a new section to an existing page, call append_confluence_page(page_id, new_content) with ONLY the new section. UPDATING PAGES: When modifying existing content, call prepare_confluence_page_merge_update(page_id) first, then call update_confluence_page_full(page_id, body) where body contains ONLY the new content you want to add. The server will automatically merge it with the existing content. WIKI MARKUP FORMAT: Use h1. h2. h3. for headings, * for bullets, # for numbered lists, {code:language}...{code} for code blocks. Example: h2. Installation\\n{code:bash}\\nsudo apt install docker\\n{code}. Always execute tool calls immediately — do not provide drafts."
+
+  # prompt_override_configuration managed externally via boto3 (fix_writer_orch_template.py)
 }
 
 resource "aws_bedrockagent_agent_action_group" "writer_actions" {
@@ -292,6 +291,22 @@ resource "aws_bedrockagent_agent_action_group" "writer_actions" {
           required      = true
         }
       }
+      functions {
+        name        = "append_confluence_page"
+        description = "Append a new section to the bottom of an existing Confluence page. Use this when you only want to ADD content without replacing anything. Provide ONLY the new section HTML in new_content."
+        parameters {
+          map_block_key = "page_id"
+          type          = "string"
+          description   = "The ID of the page to append to"
+          required      = true
+        }
+        parameters {
+          map_block_key = "new_content"
+          type          = "string"
+          description   = "The XHTML storage format content to append to the bottom of the page"
+          required      = true
+        }
+      }
     }
   }
 }
@@ -300,8 +315,8 @@ resource "aws_bedrockagent_agent_action_group" "writer_actions" {
 resource "aws_bedrockagent_agent" "supervisor_agent" {
   agent_name              = "confluence-supervisor-agent"
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
-  foundation_model        = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  instruction             = "You are the Supervisor Agent. You orchestrate Confluence updates by delegating to specialists. MANDATORY ORCHESTRATION: 1) For updates, you MUST first delegate to the Writer to call prepare_confluence_page_merge_update. 2) Delegate to the Reviewer to verify the Writer's draft. 3) ONLY allow the Writer to call write tools if the Reviewer responded with 'APPROVED'. 4) SILENT EXECUTION: DO NOT give status updates to the user while your collaborators are working. ONLY respond to the user once the final action is complete and you have the final URL to share."
+  foundation_model        = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+  instruction             = "You are the Supervisor Agent. You drive Confluence updates by COMMANDING specialists. 1) SEARCHING: When asking SearchAgent for information, provide ONLY concise keywords (e.g., 'Docker Ubuntu'). DO NOT provide verbose descriptions. 2) WRITING: When you delegate to WriterAgent, you MUST command it to 'EXECUTE the update_confluence_page_full tool with the merged content now. DO NOT just provide a draft.' 3) SILENT EXECUTION: Do not give status updates; only respond with the final result and URL when the task is complete."
 
   agent_collaboration     = "SUPERVISOR"
   prepare_agent           = false
@@ -345,7 +360,7 @@ resource "aws_bedrockagent_agent_collaborator" "search_collab" {
   relay_conversation_history = "TO_COLLABORATOR"
   agent_id                  = aws_bedrockagent_agent.supervisor_agent.id
   collaborator_name         = "SearchAgent"
-  collaboration_instruction = "Use this agent to search Confluence, read page contents, and discover child pages."
+  collaboration_instruction = "Use this agent ONLY to search Confluence, read page contents, and discover metadata/IDs. Do NOT use it for writing."
   
   agent_descriptor {
     alias_arn = aws_bedrockagent_agent_alias.search_alias.agent_alias_arn
@@ -356,7 +371,7 @@ resource "aws_bedrockagent_agent_collaborator" "writer_collab" {
   relay_conversation_history = "TO_COLLABORATOR"
   agent_id                  = aws_bedrockagent_agent.supervisor_agent.id
   collaborator_name         = "WriterAgent"
-  collaboration_instruction = "Use this agent to create or update Confluence pages."
+  collaboration_instruction = "Use this agent ONLY to create or update Confluence pages. Do NOT use it for searching or reading metadata."
   
   agent_descriptor {
     alias_arn = aws_bedrockagent_agent_alias.writer_alias.agent_alias_arn
