@@ -34,6 +34,7 @@ dependencies = [
     "aws-cdk-lib>=2.239.0",
     "fastapi>=0.122.0",
     "uvicorn>=0.38.0",
+    "langchain-aws>=0.2.35",
 ]
 
 [project.scripts]

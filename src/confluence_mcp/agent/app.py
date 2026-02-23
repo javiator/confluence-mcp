@@ -162,82 +162,84 @@ async def on_message(message: cl.Message):
     cl.user_session.set("history", history)
 
     # ---------------------------------------------------------
-    # Phase 4: AWS BEDROCK EXECUTION PATH
+    # AgentCore (LangGraph + Bedrock Runtime) Execution Path
     # ---------------------------------------------------------
     try:
-        bedrock_client = cl.user_session.get("bedrock_client")
-        session_id = cl.user_session.get("session_id")
-        
-        # Hardcoding the Agent ID we deployed via Terraform
-        # In a real app, this might come from an env var
-        AGENT_ID = "WRRZLA5LTA"
-        AGENT_ALIAS_ID = "TSTALIASID" # Default alias for DRAFT version
-        
-        # We need a separate message to update during streaming
-        msg = cl.Message(content="", author="Bedrock Agent")
-        await msg.send()
-        
-        completion = ""
-        # Invoke the Bedrock Agent
-        # Because the botocore EventStream blocks on I/O, we MUST iterate it inside the background thread!
-        def invoke_agent_and_stream():
-            nonlocal completion
-            print(f"DEBUG: Invoking Bedrock Agent {AGENT_ID} ...")
-            response = bedrock_client.invoke_agent(
-                agentId=AGENT_ID,
-                agentAliasId=AGENT_ALIAS_ID,
-                sessionId=session_id,
-                inputText=message.content,
-            )
+        mcp_client = cl.user_session.get("mcp_client")
+        if not mcp_client:
+            mcp_client = MCPClient()
+            await mcp_client.connect()
+            cl.user_session.set("mcp_client", mcp_client)
             
-            print("DEBUG: Iterating over response completion stream inside thread...")
-            for event in response.get("completion"):
-                if "chunk" in event:
-                    chunk_data = event["chunk"].get("bytes")
-                    if chunk_data:
-                        chunk_str = chunk_data.decode("utf-8")
-                        completion += chunk_str
-                        # Thread-safe async call to Chainlit
-                        cl.run_sync(msg.stream_token(chunk_str))
-                
-                elif "trace" in event:
-                    trace_obj = event["trace"].get("trace", {})
-                    if "orchestrationTrace" in trace_obj:
-                        orch_trace = trace_obj["orchestrationTrace"]
-                        if "invocationInput" in orch_trace:
-                            tool_name = orch_trace["invocationInput"].get("actionGroupInvocationInput", {}).get("function")
-                            if tool_name:
-                                # Send a temporary status update safely
-                                async def send_tool_msg():
-                                    await cl.Message(content=f"🛠️ Tool call: `{tool_name}`", author="System").send()
-                                cl.run_sync(send_tool_msg())
+        from confluence_mcp.agent.bedrock_graph import create_bedrock_graph
+        app = create_bedrock_graph(mcp_client)
         
-        print("DEBUG: Calling make_async(invoke_agent_and_stream)...")
-        await cl.make_async(invoke_agent_and_stream)()
-        print("DEBUG: Finished streaming from thread.")
-
-        # Update history with the final result
-        history.append(AIMessage(content=completion))
-        cl.user_session.set("history", history)
+        session_id = cl.user_session.get("session_id")
+        config = {"configurable": {"thread_id": session_id}}
+        
+        # Graph execution loop
+        state = {
+            "messages": history,
+            "session_id": session_id,
+            "revision_count": 0,
+            "reasoning_trace": []
+        }
+        
+        config["recursion_limit"] = 50
+        
+        final_content = ""
+        final_chunk = None
+        
+        async for chunk in app.astream(state, config=config, stream_mode="values"):
+            final_chunk = chunk
+            if "messages" in chunk:
+                last_msg = chunk["messages"][-1]
+                
+                # Track the latest AI response content
+                # Bedrock returns content as either a plain string OR a list of blocks
+                # e.g. [{"type": "text", "text": "Here are your results..."}]
+                if isinstance(last_msg, AIMessage) and not last_msg.tool_calls:
+                    if isinstance(last_msg.content, str) and last_msg.content:
+                        final_content = last_msg.content
+                    elif isinstance(last_msg.content, list):
+                        text_parts = [
+                            block.get("text", "")
+                            for block in last_msg.content
+                            if isinstance(block, dict) and block.get("type") == "text"
+                        ]
+                        extracted = "\n".join(p for p in text_parts if p)
+                        if extracted:
+                            final_content = extracted
+                
+                # Log tool calls and agent activations to reasoning trace
+                if "reasoning_trace" in chunk:
+                    trace = chunk["reasoning_trace"]
+                    if trace:
+                        # Display the latest reasoning steps as Chainlit Steps
+                        displayed = cl.user_session.get("displayed_steps", [])
+                        for step_content in trace[len(displayed):]:
+                            async with cl.Step(name="Agent Reasoning") as step:
+                                step.output = step_content
+                                await step.send()
+                        cl.user_session.set("displayed_steps", trace)
+        
+        # Final history sync
+        if final_chunk:
+            cl.user_session.set("history", final_chunk["messages"])
+        cl.user_session.set("displayed_steps", [])  # Reset for next message
+        
+        # Always send a final response message
+        # This ensures the response is visible without requiring a second message
+        await cl.Message(
+            content=final_content if final_content else "✅ Done.",
+            author="Confluence AI"
+        ).send()
         
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"DEBUG: Error caught: {e}")
-        await cl.Message(content=f"Error executing AWS Bedrock Agent: {str(e)}").send()
+        await cl.Message(content=f"Error in Bedrock AgentCore: {str(e)}").send()
         return
-
-    # Phase 2: Save conversation to memory after each exchange
-    memory_store = cl.user_session.get("memory_store")
-    session_id = cl.user_session.get("session_id")
-    if memory_store and session_id:
-        try:
-            memory_store.save_session(session_id, history)
-        except Exception as e:
-            # Don't fail the conversation if memory save fails, just log
-            print(f"Warning: Failed to save session to memory: {e}")
-
-    await msg.update()
 
 @cl.on_chat_end
 async def on_chat_end():

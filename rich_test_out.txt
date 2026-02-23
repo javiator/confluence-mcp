@@ -1,5 +1,0 @@
-Sending rich formatting request to Supervisor (Session: 7deb2321-4897-44eb-83c6-5df03c0e0ed4)...
-Agent Response:
-I apologize, but the SearchAgent was unable to locate the page titled 'How to Install Docker on Ubuntu' on the Confluence site. Could you please provide any additional details about where this page might be located, such as the specific Confluence space or a link to the page? That would help me try to find it.
-
-Check Confluence to see if the rendering is correct.

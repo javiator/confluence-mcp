@@ -3,9 +3,11 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from fastmcp import FastMCP
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Annotated
+from pydantic import Field
 from dotenv import load_dotenv
 import boto3
+import html
 from botocore.exceptions import ClientError
 
 load_dotenv()
@@ -105,88 +107,12 @@ def clean_html(html_content: str) -> str:
     except Exception:
         return html_content # Fallback to raw if parsing fails
 
-def convert_wiki_markup_to_xhtml(body: str) -> str:
-    """
-    Convert Confluence Wiki Markup to storage format XHTML.
-    Handles common patterns: h1-h6 headings, code blocks, lists.
-    """
-    if not body:
-        return body
 
-    # Strip outer <p> tags if they're wrapping Wiki markup
-    stripped = body.strip()
-    if stripped.startswith('<p>') and stripped.endswith('</p>'):
-        inner = stripped[3:-4]  # Remove <p> and </p>
-        # Check if inner content looks like Wiki markup
-        if re.match(r'^h[1-6]\.', inner.strip()) or '{code' in inner:
-            body = inner
-
-    # Check if it's already proper XHTML (has proper heading or ac: tags)
-    if '<h1>' in body or '<h2>' in body or '<ac:' in body:
-        return body
-
-    lines = body.split('\n')
-    output = []
-    in_code_block = False
-    code_lang = None
-    code_content = []
-
-    for line in lines:
-        # Code block end: {code} - check this FIRST before checking for start
-        if in_code_block and line.strip() == '{code}':
-            in_code_block = False
-            # Build proper XHTML code macro with CDATA
-            code_str = '\n'.join(code_content)
-            code_xml = f'<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">{code_lang}</ac:parameter><ac:plain-text-body><![CDATA[{code_str}]]></ac:plain-text-body></ac:structured-macro>'
-            output.append(code_xml)
-            continue
-
-        # Code block start: {code:lang} or {code}
-        if line.strip().startswith('{code'):
-            in_code_block = True
-            # Extract language if specified
-            match = re.match(r'\{code:(\w+)\}', line.strip())
-            code_lang = match.group(1) if match else 'none'
-            code_content = []
-            continue
-
-        if in_code_block:
-            code_content.append(line)
-            continue
-
-        # Headings: h1. h2. h3. etc
-        heading_match = re.match(r'^h([1-6])\.\s+(.+)$', line.strip())
-        if heading_match:
-            level = heading_match.group(1)
-            text = heading_match.group(2)
-            output.append(f'<h{level}>{text}</h{level}>')
-            continue
-
-        # Bullet list: * item
-        if line.strip().startswith('* '):
-            text = line.strip()[2:]
-            output.append(f'<ul><li>{text}</li></ul>')
-            continue
-
-        # Numbered list: # item
-        if line.strip().startswith('# '):
-            text = line.strip()[2:]
-            output.append(f'<ol><li>{text}</li></ol>')
-            continue
-
-        # Plain paragraph
-        if line.strip():
-            output.append(f'<p>{line.strip()}</p>')
-
-    return ''.join(output)
 
 
 def robust_sanitize_confluence_xhtml(body: str) -> str:
     if not body:
         return body
-
-    # First, try to convert Wiki markup to XHTML if needed
-    body = convert_wiki_markup_to_xhtml(body)
 
     # Fix 0: Strip Confluence-generated 'invalidmacro' placeholders COMPLETELY
     body = re.sub(
@@ -201,8 +127,79 @@ def robust_sanitize_confluence_xhtml(body: str) -> str:
         flags=re.DOTALL
     )
 
-    # Fix 0.5: Strip <result> tags if the LLM wrapped the whole thing
-    body = re.sub(r'^<result>(.*?)</result>$', r'\1', body.strip(), flags=re.DOTALL)
+    # Fix 0.5: Strip markdown code block indicators anywhere in the text
+    body = re.sub(r'```[a-zA-Z]*\n?', '', body)
+    body = re.sub(r'```', '', body)
+
+    # Fix 0.6: Unescape entities if the model accidentally encoded the entire payload
+    # This is a common failure mode for some LLMs.
+    if "&lt;ac:" in body or "&lt;h1&gt;" in body or "&quot;" in body or "&lt;h2&gt;" in body:
+        # Unescape up to 3 times to handle double/triple escaping if necessary
+        for _ in range(3):
+            if "&lt;" in body:
+                body = html.unescape(body)
+            else:
+                break
+
+    # Fix 0.7: Extract strictly from the first '<' to the last '>'
+    # This automatically drops any conversational padding LLMs might hallucinate
+    # around the actual HTML payload.
+    start_idx = body.find('<')
+    end_idx = body.rfind('>')
+    if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+        body = body[start_idx:end_idx + 1]
+
+    # Fix 0.75: Strip outer CDATA if the model wrapped the ENTIRE payload in it
+    if body.startswith("<![CDATA[") and body.endswith("]]>"):
+        body = body[9:-3].strip()
+
+    # Fix 0.8: Ensure CDATA sections are closed within plain-text-body
+    # Some LLMs start <![CDATA[ but forget ]]> OR they forget to close the tag entirely
+    # before starting a new header or macro.
+    
+    # First, fix missing ]]> inside existing <ac:plain-text-body> tags
+    def repair_cdata_closure(m):
+        inner = m.group(1)
+        if "<![CDATA[" in inner and "]]>" not in inner:
+            return f"<ac:plain-text-body>{inner}]]></ac:plain-text-body>"
+        return m.group(0)
+
+    body = re.sub(
+        r'<ac:plain-text-body>(.*?)</ac:plain-text-body>',
+        repair_cdata_closure,
+        body,
+        flags=re.DOTALL
+    )
+
+    # Second, fix cases where <ac:plain-text-body> starts but NEVER closes
+    # This happens when the model starts a code block and then just keeps going.
+    # We find ALL <ac:plain-text-body> starts and ensure they don't swallow headers.
+    
+    def robust_dangling_repair(text):
+        parts = re.split(r'(<ac:plain-text-body>)', text)
+        new_parts = []
+        for i in range(len(parts)):
+            if parts[i] == '<ac:plain-text-body>':
+                # The next part is the content of this body
+                if i + 1 < len(parts):
+                    content = parts[i+1]
+                    # If this content doesn't have a closing tag but HAS a header/macro
+                    if '</ac:plain-text-body>' not in content and ('<h' in content.lower() or '<ac:structured-macro' in content.lower()):
+                         repair_point = re.search(r'(?i)<h[1-6]|<ac:', content)
+                         if repair_point:
+                             idx = repair_point.start()
+                             pre = content[:idx]
+                             post = content[idx:]
+                             if "<![CDATA[" in pre and "]]>" not in pre:
+                                 pre = pre + "]]>"
+                             # Update the next part in the sequence
+                             parts[i+1] = pre + "</ac:plain-text-body>\n" + post
+                new_parts.append(parts[i])
+            else:
+                new_parts.append(parts[i])
+        return "".join(new_parts)
+
+    body = robust_dangling_repair(body)
 
     # Fix 1: <ac:parameter> missing ac:name
     body = re.sub(
@@ -375,11 +372,19 @@ def _get_confluence_page(page_id: str) -> Dict[str, Any]:
         return {"error": str(e)}
 
 @mcp.tool()
-def create_confluence_page(space_key: str, parent_id: str, title: str, body: str) -> Dict[str, Any]:
+def execute_confluence_publish(
+    space_key: str, 
+    parent_id: str, 
+    title: str, 
+    xhtml_payload: Annotated[str, Field(description="MANDATORY: The full Confluence XHTML content to publish.")]
+) -> Dict[str, Any]:
     """
-    Create a new Confluence page in a restricted set of spaces and parents.
-    Automatically applies 'ai-generated' label.
+    Create a new Confluence page with mandatory XHTML content.
+    Requires space_key, parent_id, title, AND xhtml_payload.
     """
+    if not xhtml_payload:
+         return {"error": "Missing required argument 'xhtml_payload'. You MUST provide the page content."}
+    
     # Access Control Checks
     if space_key not in ALLOWED_SPACES:
         return {"error": f"Space '{space_key}' is not in the allowed list."}
@@ -396,7 +401,7 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
         "space": {"key": space_key},
         "body": {
             "storage": {
-                "value": robust_sanitize_confluence_xhtml(body),
+                "value": robust_sanitize_confluence_xhtml(xhtml_payload),
                 "representation": "storage"
             }
         },
@@ -416,7 +421,6 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
         )
         response.raise_for_status()
         data = response.json()
-        
         return {
             "id": data.get("id"),
             "spaceKey": space_key,
@@ -426,24 +430,14 @@ def create_confluence_page(space_key: str, parent_id: str, title: str, body: str
         return {"error": str(e)}
 
 @mcp.tool()
-def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
+def update_page_full(page_id: str, page_content_xhtml: str = "") -> Dict[str, Any]:
     """
-    Update a Confluence page. If prepare_confluence_page_merge_update was called first,
-    this will merge the new body with the cached existing content. Otherwise, it replaces the page entirely.
-    Only allowed if the page is in an allowed space and has 'ai-generated' or 'ai-managed' labels.
+    Update a Confluence page with a new full page_content_xhtml payload.
+    Requires page_id AND page_content_xhtml.
     """
-    # Check if there's cached content from prepare_confluence_page_merge_update
-    cached_data = _prepared_pages_cache.get(page_id)
-
-    if cached_data:
-        # Merge workflow: combine cached existing content with new content
-        existing_content = cached_data.get("storageContent", "")
-        merged_body = existing_content + "\n" + body
-        # Clear cache after use
-        del _prepared_pages_cache[page_id]
-    else:
-        # Direct replacement workflow (no prepare step)
-        merged_body = body
+    if not page_content_xhtml:
+        return {"error": "Missing required argument 'page_content_xhtml'. You MUST provide the fully merged XHTML string."}
+    merged_body = page_content_xhtml
 
     # 1. Fetch current info to check permissions and get version
     url_get = f"{BASE_URL}/rest/api/content/{page_id}"
@@ -526,13 +520,13 @@ def update_confluence_page_full(page_id: str, body: str) -> Dict[str, Any]:
         return {"error": str(e)}
 
 @mcp.tool()
-def append_confluence_page(page_id: str, new_content: str) -> Dict[str, Any]:
+def append_to_page(page_id: str, page_content_xhtml: str = "") -> Dict[str, Any]:
     """
     Append new content to the bottom of an existing Confluence page.
-    Use this instead of update_confluence_page_full when you only want to ADD new sections
-    without replacing existing content. Provide ONLY the new section(s) as new_content.
-    Only allowed if the page has 'ai-generated' or 'ai-managed' labels.
+    Requires page_id AND page_content_xhtml.
     """
+    if not page_content_xhtml:
+        return {"error": "Missing required argument 'page_content_xhtml'. You MUST provide the content to append."}
     url_get = f"{BASE_URL}/rest/api/content/{page_id}"
     params = {"expand": "body.storage,space,version,metadata.labels"}
 
@@ -564,7 +558,7 @@ def append_confluence_page(page_id: str, new_content: str) -> Dict[str, Any]:
         current_body = data.get("body", {}).get("storage", {}).get("value", "")
 
         # Sanitize and merge
-        sanitized_new = robust_sanitize_confluence_xhtml(new_content)
+        sanitized_new = robust_sanitize_confluence_xhtml(body)
         merged_body = current_body + "\n" + sanitized_new
 
         payload = {
@@ -645,13 +639,14 @@ def prepare_confluence_page_merge_update(page_id: str) -> Dict[str, Any]:
             "storageContent": sanitized_body
         }
 
-        # Return minimal metadata to the agent (NOT the full content)
+        # Return metadata AND text context to the agent so it can perform the merge logic
         return {
             "status": "prepared",
             "page_id": page_id,
             "title": data.get("title"),
             "version": data.get("version", {}).get("number"),
-            "message": f"Page {page_id} prepared for update. Content cached server-side. You can now call update_confluence_page_full with your new merged content."
+            "existingContent": clean_html(body_html),
+            "message": f"Page {page_id} prepared for update. Existing content provided in 'existingContent'. Use this to generate your new merged XHTML and call update_confluence_page_full."
         }
         
     except requests.RequestException as e:

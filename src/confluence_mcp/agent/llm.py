@@ -32,6 +32,19 @@ def get_llm(provider: str = "openai", model: Optional[str] = None) -> BaseChatMo
             raise ValueError("GOOGLE_API_KEY not found in environment")
         return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, temperature=0)
         
+    elif provider == "bedrock":
+        from langchain_aws import ChatBedrock
+        model = model or "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+        return ChatBedrock(
+            model_id=model,
+            region_name=region,
+            model_kwargs={
+                "temperature": 0,
+                "max_tokens": 8192
+            }
+        )
+        
     elif provider == "ollama":
         from langchain_ollama import ChatOllama
         model = model or "llama3"
