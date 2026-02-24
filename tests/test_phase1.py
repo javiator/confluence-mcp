@@ -3,7 +3,7 @@ Phase 1: Multi-Agent Tests
 Verify graph structure and tool routing without making real LLM/MCP calls.
 """
 import pytest
-from confluence_mcp.agent.graph import (
+from confluence_mcp.chat_app.graph import (
     SEARCH_TOOLS, WRITER_TOOLS, REVIEWER_TOOLS,
     SUPERVISOR_PROMPT, SEARCH_PROMPT, WRITER_PROMPT, REVIEWER_PROMPT,
     AgentState,
@@ -58,7 +58,7 @@ def test_agent_state_has_required_keys():
 
 def test_publish_tools_defined():
     """Publish tools that trigger review must be defined."""
-    from confluence_mcp.agent.graph import PUBLISH_TOOLS
+    from confluence_mcp.chat_app.graph import PUBLISH_TOOLS
     assert PUBLISH_TOOLS == {"create_confluence_page", "update_confluence_page_full"}
 
 
@@ -89,7 +89,7 @@ def test_revision_counter_in_state():
 
 def test_max_revision_iterations_defined():
     """MAX_REVISION_ITERATIONS must be defined to prevent infinite loops."""
-    from confluence_mcp.agent.graph import MAX_REVISION_ITERATIONS
+    from confluence_mcp.chat_app.graph import MAX_REVISION_ITERATIONS
     assert isinstance(MAX_REVISION_ITERATIONS, int)
     assert 2 <= MAX_REVISION_ITERATIONS <= 5, f"MAX_REVISION_ITERATIONS should be 2-5, got {MAX_REVISION_ITERATIONS}"
 

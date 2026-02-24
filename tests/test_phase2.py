@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
-from confluence_mcp.agent.memory import MemoryStore
+from confluence_mcp.chat_app.memory import MemoryStore
 
 
 # ── Memory Tests ────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ def test_memory_store_delete_session():
 
 def test_entity_extraction_from_search():
     """Test that search results extract page entities correctly."""
-    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+    from confluence_mcp.chat_app.entities import extract_entities_from_tool_result
 
     # Simulate search_confluence tool result
     tool_result = """
@@ -231,7 +231,7 @@ def test_entity_extraction_from_search():
 
 def test_entity_context_injection_supervisor():
     """Test that entity context is formatted correctly for prompts."""
-    from confluence_mcp.agent.entities import format_entity_context
+    from confluence_mcp.chat_app.entities import format_entity_context
 
     entities = {
         "pages": [
@@ -259,7 +259,7 @@ def test_entity_context_injection_supervisor():
 
 def test_entity_recency_ordering():
     """Test that only the 10 most recent pages are kept."""
-    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+    from confluence_mcp.chat_app.entities import extract_entities_from_tool_result
     import json
 
     # Create 15 pages
@@ -297,7 +297,7 @@ def test_entity_recency_ordering():
 
 def test_coreference_resolution():
     """Test that 'it', 'that page', etc. resolve to last_page."""
-    from confluence_mcp.agent.entities import resolve_coreference
+    from confluence_mcp.chat_app.entities import resolve_coreference
 
     entities = {
         "pages": [{"id": "12345", "title": "API Docs", "space": "ENG"}],
@@ -326,7 +326,7 @@ def test_coreference_resolution():
 
 def test_known_entities_structure():
     """Test that known_entities dict has the expected structure."""
-    from confluence_mcp.agent.entities import extract_entities_from_tool_result
+    from confluence_mcp.chat_app.entities import extract_entities_from_tool_result
 
     entities = extract_entities_from_tool_result(
         tool_name="search_confluence",
@@ -361,7 +361,7 @@ def test_known_entities_structure():
 
 def test_reasoning_trace_populated():
     """Test that reasoning_trace is populated in AgentState."""
-    from confluence_mcp.agent.graph import AgentState
+    from confluence_mcp.chat_app.graph import AgentState
 
     # Verify reasoning_trace is in AgentState schema
     assert "reasoning_trace" in AgentState.__annotations__
@@ -372,7 +372,7 @@ def test_reasoning_trace_populated():
 
 def test_confidence_score_valid_range():
     """Test that supervisor_confidence is between 0.0 and 1.0."""
-    from confluence_mcp.agent.graph import AgentState
+    from confluence_mcp.chat_app.graph import AgentState
 
     # Verify supervisor_confidence is in AgentState schema
     assert "supervisor_confidence" in AgentState.__annotations__
@@ -391,7 +391,7 @@ def test_reasoning_trace_structure():
     # "🔍 Search Agent: Processing request..."
 
     # For now, just verify the schema is correct
-    from confluence_mcp.agent.graph import AgentState
+    from confluence_mcp.chat_app.graph import AgentState
 
     state: AgentState = {
         "messages": [],

@@ -8,9 +8,9 @@ load_dotenv()
 
 import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
-from confluence_mcp.agent.client import MCPClient
-from confluence_mcp.agent.graph import create_graph
-from confluence_mcp.agent.memory import MemoryStore
+from confluence_mcp.chat_app.client import MCPClient
+from confluence_mcp.chat_app.graph import create_graph
+from confluence_mcp.chat_app.memory import MemoryStore
 
 import boto3
 
@@ -243,7 +243,7 @@ async def _run_local(user_message: str, session_id: str, history: list):
             await mcp_client.connect()
             cl.user_session.set("mcp_client", mcp_client)
 
-        from confluence_mcp.agent.bedrock_graph import create_bedrock_graph
+        from confluence_mcp.chat_app.bedrock_graph import create_bedrock_graph
         app = create_bedrock_graph(mcp_client)
 
         config = {"configurable": {"thread_id": session_id}, "recursion_limit": 50}

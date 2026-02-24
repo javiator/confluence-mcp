@@ -337,7 +337,7 @@ MAX_REVISION_ITERATIONS = 3  # Configurable limit (2-5 recommended)
 
 ### File Structure
 ```
-src/confluence_mcp/agent/
+src/confluence_mcp.chat_app/
 ├── graph.py        # Multi-agent graph, supervisor, routing, tool gate
 ├── app.py          # Chainlit UI with agent step badges
 ├── client.py       # MCP client (unchanged)
@@ -367,7 +367,7 @@ tests/
 
 Phase 1 is **complete**. To continue learning:
 
-1. **Test it live**: Run `chainlit run src/confluence_mcp/agent/app.py` and try the flows above
+1. **Test it live**: Run `chainlit run src/confluence_mcp.chat_app/app.py` and try the flows above
 2. **Phase 2**: Add memory, context awareness, and intelligent routing
 3. **Benchmarking** (optional): Compare token usage vs Phase 0 in real scenarios
 

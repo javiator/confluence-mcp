@@ -20,7 +20,7 @@ Transformed stateless agents into intelligent assistants with:
 ## 📦 Three Sub-Phases
 
 ### Phase 2.1: Conversation Memory (P0)
-**File**: `src/confluence_mcp/agent/memory.py`
+**File**: `src/confluence_mcp.chat_app/memory.py`
 
 ```python
 memory_store = MemoryStore()  # ~/.confluence_mcp/memory.db
@@ -33,7 +33,7 @@ messages = memory_store.load_session(session_id)
 ---
 
 ### Phase 2.2: Entity Tracking & Resolution (P0)
-**File**: `src/confluence_mcp/agent/entities.py`
+**File**: `src/confluence_mcp.chat_app/entities.py`
 
 ```python
 known_entities = {
@@ -64,13 +64,13 @@ reasoning_trace = [
 ## 🗂️ Files Added/Modified
 
 **New Files:**
-- `src/confluence_mcp/agent/memory.py` (226 lines)
-- `src/confluence_mcp/agent/entities.py` (318 lines)
+- `src/confluence_mcp.chat_app/memory.py` (226 lines)
+- `src/confluence_mcp.chat_app/entities.py` (318 lines)
 - `tests/test_phase2.py` (421 lines, 12 tests)
 
 **Modified:**
-- `src/confluence_mcp/agent/graph.py` (+150 lines)
-- `src/confluence_mcp/agent/app.py` (+25 lines)
+- `src/confluence_mcp.chat_app/graph.py` (+150 lines)
+- `src/confluence_mcp.chat_app/app.py` (+25 lines)
 
 **Total**: ~700 lines of new code
 

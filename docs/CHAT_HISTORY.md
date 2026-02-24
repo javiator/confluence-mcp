@@ -42,7 +42,7 @@ When you resume a chat:
 ### Database Location
 The chat history is stored in `confluence_memory.db` at the project root by default.
 
-To change the database location, modify `src/confluence_mcp/agent/memory.py`:
+To change the database location, modify `src/confluence_mcp.chat_app/memory.py`:
 ```python
 class MemoryStore:
     def __init__(self, db_path: str = "./confluence_memory.db"):
@@ -66,7 +66,7 @@ The system uses a **single-database design** for efficiency:
 - **Single source of truth** for all conversation data
 - Stores full conversation messages in LangChain format
 - Includes session metadata (model, timestamps, message count)
-- Managed by the `MemoryStore` class (`src/confluence_mcp/agent/memory.py`)
+- Managed by the `MemoryStore` class (`src/confluence_mcp.chat_app/memory.py`)
 
 **How Chainlit integration works:**
 - Chainlit's UI automatically tracks thread metadata (thread_id, creation time)
@@ -86,7 +86,7 @@ Just click "New Chat" - the previous conversation is automatically saved.
 
 ### Viewing All Sessions Programmatically
 ```python
-from confluence_mcp.agent.memory import MemoryStore
+from confluence_mcp.chat_app.memory import MemoryStore
 
 store = MemoryStore()
 sessions = store.list_sessions()

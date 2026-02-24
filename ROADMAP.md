@@ -129,7 +129,7 @@ Document in evolution format:
 
 ### 1. Create Specialized Agents
 ```python
-# src/confluence_mcp/agent/agents/search_agent.py
+# src/confluence_mcp.chat_app/agents/search_agent.py
 class SearchAgent:
     """Specializes in Confluence search and retrieval"""
 
@@ -142,7 +142,7 @@ class SearchAgent:
         # Implement search logic
         pass
 
-# src/confluence_mcp/agent/agents/writer_agent.py
+# src/confluence_mcp.chat_app/agents/writer_agent.py
 class WriterAgent:
     """Specializes in creating well-structured content"""
 
@@ -157,7 +157,7 @@ class WriterAgent:
 
 ### 2. Supervisor Pattern
 ```python
-# src/confluence_mcp/agent/supervisor.py
+# src/confluence_mcp.chat_app/supervisor.py
 from langgraph.graph import StateGraph
 
 def create_supervisor_graph():
@@ -187,7 +187,7 @@ def create_supervisor_graph():
 
 ### 3. Enhanced Chainlit UI
 ```python
-# src/confluence_mcp/agent/app.py - Add visualization
+# src/confluence_mcp.chat_app/app.py - Add visualization
 @cl.on_message
 async def on_message(message: cl.Message):
     # Show which agent is active
@@ -218,7 +218,7 @@ async def on_message(message: cl.Message):
 python -m pytest tests/test_supervisor.py -v
 
 # Run interactive demo
-chainlit run src/confluence_mcp/agent/app.py
+chainlit run src/confluence_mcp.chat_app/app.py
 
 # Example interaction:
 # User: "Create a technical spec for OAuth2 implementation"
@@ -246,7 +246,7 @@ chainlit run src/confluence_mcp/agent/app.py
 
 ### 1. Add Memory to Agents
 ```python
-# src/confluence_mcp/agent/memory.py
+# src/confluence_mcp.chat_app/memory.py
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 # Add persistent memory
@@ -260,7 +260,7 @@ response = await graph.ainvoke(inputs, config=config)
 
 ### 2. Agent Learning
 ```python
-# src/confluence_mcp/agent/learning.py
+# src/confluence_mcp.chat_app/learning.py
 class AgentLearning:
     """Tracks agent performance and improves over time"""
 
@@ -283,7 +283,7 @@ class AgentLearning:
 
 ### 3. Shared Knowledge Base
 ```python
-# src/confluence_mcp/agent/knowledge.py
+# src/confluence_mcp.chat_app/knowledge.py
 class SharedKnowledge:
     """Knowledge shared across all agents"""
 
@@ -326,7 +326,7 @@ class SharedKnowledge:
 
 ### 1. CrewAI Setup
 ```python
-# src/confluence_mcp/agent/frameworks/crewai_impl.py
+# src/confluence_mcp.chat_app/frameworks/crewai_impl.py
 from crewai import Agent, Task, Crew, Process
 
 # Define agents
@@ -770,7 +770,7 @@ class AgentOrchestrator:
 # Implement based on chosen framework
 # Example: If LangGraph won
 
-# src/confluence_mcp/agent/production/
+# src/confluence_mcp.chat_app/production/
 ├── agents/
 │   ├── search_agent.py
 │   ├── writer_agent.py
@@ -785,7 +785,7 @@ class AgentOrchestrator:
 
 ### 2. Add Monitoring
 ```python
-# src/confluence_mcp/agent/monitoring.py
+# src/confluence_mcp.chat_app/monitoring.py
 from opentelemetry import trace
 from prometheus_client import Counter, Histogram
 
@@ -871,7 +871,7 @@ services:
 
   chainlit-ui:
     build: .
-    command: chainlit run src/confluence_mcp/agent/app.py
+    command: chainlit run src/confluence_mcp.chat_app/app.py
     ports:
       - "8001:8001"
 

@@ -83,8 +83,8 @@ echo ""
 # Step 5: Create directory structure
 echo "📁 Step 5: Creating directory structure..."
 mkdir -p tests/
-mkdir -p src/confluence_mcp/agent/agents/
-mkdir -p src/confluence_mcp/agent/frameworks/
+mkdir -p src/confluence_mcp.chat_app/agents/
+mkdir -p src/confluence_mcp.chat_app/frameworks/
 mkdir -p docs/tutorials/
 mkdir -p examples/
 mkdir -p benchmarks/
@@ -233,7 +233,7 @@ echo ""
 echo "🎯 Next Steps:"
 echo "  1. Activate environment: source .venv/bin/activate"
 echo "  2. Run the MCP server: uv run confluence-mcp"
-echo "  3. Run the Chainlit UI: uv run chainlit run src/confluence_mcp/agent/app.py"
+echo "  3. Run the Chainlit UI: uv run chainlit run src/confluence_mcp.chat_app/app.py"
 echo "  4. Audit the codebase and fill in docs/PHASE0_NOTES.md"
 echo "  5. Run tests: uv run pytest tests/ -v"
 echo ""

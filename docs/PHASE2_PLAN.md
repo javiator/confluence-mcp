@@ -148,8 +148,8 @@ What the agent **knows how to do** — learned skills.
 ### **Day 1-2: Conversation Memory (P0)**
 
 **Files**:
-- `src/confluence_mcp/agent/memory.py` — SQLite-backed storage
-- `src/confluence_mcp/agent/app.py` — Session management
+- `src/confluence_mcp.chat_app/memory.py` — SQLite-backed storage
+- `src/confluence_mcp.chat_app/app.py` — Session management
 
 **New AgentState fields**:
 ```python
@@ -173,8 +173,8 @@ class AgentState(TypedDict):
 ### **Day 3-4: Entity Tracking & Resolution (P0)**
 
 **Files**:
-- `src/confluence_mcp/agent/graph.py` — State updates, context injection
-- `src/confluence_mcp/agent/entities.py` (NEW) — Entity extraction utilities
+- `src/confluence_mcp.chat_app/graph.py` — State updates, context injection
+- `src/confluence_mcp.chat_app/entities.py` (NEW) — Entity extraction utilities
 
 **New AgentState fields**:
 ```python
@@ -211,7 +211,7 @@ class AgentState(TypedDict):
 ### **Day 5-6: Chain of Thought + Confidence (P1)**
 
 **Files**:
-- `src/confluence_mcp/agent/graph.py` — Add reasoning trace + confidence
+- `src/confluence_mcp.chat_app/graph.py` — Add reasoning trace + confidence
 
 **New AgentState fields**:
 ```python
@@ -235,7 +235,7 @@ class AgentState(TypedDict):
 ### **Day 7: User Preferences + Polish (P1)**
 
 **Files**:
-- `src/confluence_mcp/agent/preferences.py` (NEW) — JSON preference store
+- `src/confluence_mcp.chat_app/preferences.py` (NEW) — JSON preference store
 
 **Preference structure**:
 ```json
@@ -267,7 +267,7 @@ class AgentState(TypedDict):
 ## 🗂️ Complete File Structure (Phase 2)
 
 ```
-src/confluence_mcp/agent/
+src/confluence_mcp.chat_app/
 ├── graph.py          # AgentState with new fields, context injection
 ├── app.py            # Session management, memory integration
 ├── memory.py         # NEW: SQLite MemoryStore
