@@ -18,6 +18,13 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Session Memory**: Persistent conversation history across AWS Lambda restarts.
 - **Cost Optimized**: Dynamic support for Claude 3 Haiku and Amazon Nova Lite.
 
+## 📚 Documentation Guides
+
+For detailed instructions, see the dedicated documentation:
+- **[Usage & Deployment Guide](docs/USAGE_GUIDE.md)**: How to deploy from scratch, useful AgentCore CLI commands, daily usage, and complete AWS teardown instructions.
+- **[AgentCore Architecture](docs/BEDROCK_AGENT_ARCHITECTURE.md)**: Deep dive into the cloud-native routing and design.
+- **[AgentCore Manual Setup](docs/AGENTCORE_SETUP.md)**: Manual AWS console steps and troubleshooting for the hosted runtime.
+
 ## ☁️ Architecture: AWS Bedrock AgentCore
 
 The project has transitioned to a high-performance, cloud-native architecture. 
