@@ -1,8 +1,7 @@
 fastmcp
 requests
 beautifulsoup4
-python-dotenv
-mcp
-boto3
 fastapi
 uvicorn
+boto3
+python-dotenv
