@@ -40,8 +40,37 @@ resource "aws_iam_role_policy_attachment" "agentcore_mcp_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# SSM read access — same parameters used by ConfluenceMCPServer so we reference
-# their ARNs without modifying the originals.
+# ── SSM Parameters ─────────────────────────────────────────────────────────────
+# These were moved from the legacy 'managed' stack to keep AgentCore independent.
+
+resource "aws_ssm_parameter" "confluence_base_url" {
+  name  = "/confluence/base_url"
+  type  = "String"
+  value = "REPLACE_ME" # User updates via AWS Console/CLI
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "confluence_email" {
+  name  = "/confluence/email"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "confluence_api_token" {
+  name  = "/confluence/api_token"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# SSM read access
 resource "aws_iam_policy" "agentcore_mcp_ssm" {
   name = "AgentCoreMCPSSMPolicy"
 
@@ -51,11 +80,10 @@ resource "aws_iam_policy" "agentcore_mcp_ssm" {
       {
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:GetParameters"]
-        # Reference the same SSM params already created in terraform/managed/mcp_server.tf
         Resource = [
-          "arn:aws:ssm:us-east-1:${data.aws_caller_identity.current.account_id}:parameter/confluence/base_url",
-          "arn:aws:ssm:us-east-1:${data.aws_caller_identity.current.account_id}:parameter/confluence/email",
-          "arn:aws:ssm:us-east-1:${data.aws_caller_identity.current.account_id}:parameter/confluence/api_token"
+          aws_ssm_parameter.confluence_base_url.arn,
+          aws_ssm_parameter.confluence_email.arn,
+          aws_ssm_parameter.confluence_api_token.arn
         ]
       }
     ]
