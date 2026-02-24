@@ -1,6 +1,7 @@
 import os
 import asyncio
 import uuid
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
@@ -62,7 +63,12 @@ async def _initialize_session(resume_history=None):
     cl.user_session.set("mcp_client", None)
 
     # Bedrock runtime client (used for AgentCore invocation)
-    bedrock_client = boto3.client("bedrock-agent-runtime", region_name="us-east-1")
+    # AgentCore uses a specific data-plane endpoint
+    bedrock_client = boto3.client(
+        "bedrock-agentcore", 
+        region_name="us-east-1",
+        endpoint_url="https://bedrock-agentcore.us-east-1.amazonaws.com"
+    )
     cl.user_session.set("bedrock_client", bedrock_client)
 
     mode = "AgentCore (cloud)" if USE_AGENTCORE else "LangGraph (local)"
@@ -168,30 +174,51 @@ async def _run_agentcore(user_message: str, session_id: str):
     bedrock_client = cl.user_session.get("bedrock_client")
 
     try:
-        # boto3 invoke_agent is synchronous — run it in a thread so we don't
+        # boto3 invoke_agent_runtime is synchronous — run it in a thread so we don't
         # block the Chainlit event loop.
         def _call_agent():
-            return bedrock_client.invoke_agent(
-                agentId=AGENTCORE_AGENT_ID,
-                agentAliasId=AGENTCORE_AGENT_ALIAS_ID,
-                sessionId=session_id,
-                inputText=user_message,
-                enableTrace=False,
+            return bedrock_client.invoke_agent_runtime(
+                agentRuntimeArn=AGENTCORE_AGENT_ID,
+                qualifier=AGENTCORE_AGENT_ALIAS_ID,
+                runtimeSessionId=session_id,
+                payload=json.dumps({
+                    "prompt": user_message,
+                    "sessionId": session_id
+                }),
+                contentType="application/json",
             )
 
         response = await asyncio.to_thread(_call_agent)
 
         # Collect streamed response chunks
         final_content = ""
-        for event in response.get("completion", []):
-            if "chunk" in event:
-                chunk_bytes = event["chunk"].get("bytes", b"")
-                final_content += chunk_bytes.decode("utf-8")
+        # The response payload is in the "response" field for AgentCore
+        for event in response.get("response", []):
+            if isinstance(event, str):
+                final_content += event
+            elif isinstance(event, dict):
+                # Handle potential JSON objects in the stream
+                final_content += json.dumps(event, indent=2) + "\n\n"
+            elif isinstance(event, bytes):
+                final_content += event.decode("utf-8")
 
-        if not final_content:
-            final_content = "✅ Done (no text response returned)."
+        # Clean up JSON wrapping if present
+        display_content = final_content
+        try:
+            # The agent often returns a JSON string like {"result": "..."}
+            parsed = json.loads(final_content)
+            if isinstance(parsed, dict) and "result" in parsed:
+                display_content = parsed["result"]
+            elif isinstance(parsed, dict) and "message" in parsed:
+                display_content = parsed["message"]
+        except json.JSONDecodeError:
+            # Not JSON or partial JSON, use as is
+            pass
 
-        await cl.Message(content=final_content, author="Confluence AI").send()
+        if not display_content:
+            display_content = "✅ Done (no text response returned)."
+
+        await cl.Message(content=display_content, author="Confluence AI").send()
 
         # Persist to local memory for Chainlit session resume
         history = cl.user_session.get("history", [])

@@ -1,0 +1,31 @@
+╭──────────────────────────────────────────────────────────────────── Agent Status: agentcoreconfluence_agent ─────────────────────────────────────────────────────────────────────╮
+│ Ready - Agent deployed and endpoint available                                                                                                                                    │
+│                                                                                                                                                                                  │
+│ Agent Details:                                                                                                                                                                   │
+│ Agent Name: agentcoreconfluence_agent                                                                                                                                            │
+│ Agent ARN: arn:aws:bedrock-agentcore:us-east-1:383226947124:runtime/agentcoreconfluence_agent-TpNYJW6yK2                                                                         │
+│ Endpoint: DEFAULT (READY)                                                                                                                                                        │
+│ Region: us-east-1 | Account: 383226947124                                                                                                                                        │
+│                                                                                                                                                                                  │
+│ Network: Public                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│ Deployment Info:                                                                                                                                                                 │
+│ Created: 2026-02-24 19:03:40.557850+00:00                                                                                                                                        │
+│ Last Updated: 2026-02-24 21:27:37.283632+00:00                                                                                                                                   │
+│                                                                                                                                                                                  │
+│ 📋 CloudWatch Logs:                                                                                                                                                              │
+│    /aws/bedrock-agentcore/runtimes/agentcoreconfluence_agent-TpNYJW6yK2-DEFAULT --log-stream-name-prefix "2026/02/24/[runtime-logs]"                                             │
+│    /aws/bedrock-agentcore/runtimes/agentcoreconfluence_agent-TpNYJW6yK2-DEFAULT --log-stream-names "otel-rt-logs"                                                                │
+│                                                                                                                                                                                  │
+│ 🔍 GenAI Observability Dashboard:                                                                                                                                                │
+│    https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#gen-ai-observability/agent-core                                                                               │
+│                                                                                                                                                                                  │
+│ Note: Observability data may take up to 10 minutes to appear after first launch                                                                                                  │
+│                                                                                                                                                                                  │
+│ 💡 Tail logs with:                                                                                                                                                               │
+│    aws logs tail /aws/bedrock-agentcore/runtimes/agentcoreconfluence_agent-TpNYJW6yK2-DEFAULT --log-stream-name-prefix "2026/02/24/[runtime-logs]" --follow                      │
+│    aws logs tail /aws/bedrock-agentcore/runtimes/agentcoreconfluence_agent-TpNYJW6yK2-DEFAULT --log-stream-name-prefix "2026/02/24/[runtime-logs]" --since 1h                    │
+│                                                                                                                                                                                  │
+│ Ready to invoke:                                                                                                                                                                 │
+│    agentcore invoke '{"prompt": "Hello"}'                                                                                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -252,16 +252,21 @@ def _search_confluence(query: str) -> List[Dict[str, Any]]:
     """
     # Build base CQL query
     # Check if the query looks like raw CQL (contains explicit operators and is not just a title)
+    # We broaden this to include OR/AND/Quotes even WITHOUT explicit field names like ~ or =
     cql_operators = ["=", "~", " IN ", " OR ", " AND "]
-    is_raw_cql = any(op in query or op.upper() in query.upper() for op in cql_operators)
+    has_operator = any(op in query or op.upper() in query.upper() for op in cql_operators)
+    has_quotes = '"' in query
     
-    # If it's a multi-word query but lacks explicit '=' or '~', assume it's a search term
-    # Titles like "How to Install and Uninstall Docker on Ubuntu" contain AND but aren't CQL.
-    # We force text search if no explicit property operator (~, =) is found.
-    if is_raw_cql and ("=" in query or "~" in query or " IN " in query.upper()):
+    is_raw_cql = has_operator or has_quotes
+    
+    if is_raw_cql:
+        # If it's already CQL-like, we wrap it in a type=page filter.
+        # Note: If it's just quotes but missing a field, we might still need to fix it,
+        # but usually Bedrock agents send 'text ~ "..."' if they are being precise.
+        # If they just send "query", we'll try it as raw CQL first.
         base_cql = f'({query}) AND type=page'
     else:
-        # Simple text search - escape quotes and wrap in text search
+        # Simple keywords - wrap in a text search
         safe_query = query.replace('"', '\\"')
         base_cql = f'text ~ "{safe_query}" AND type=page'
     

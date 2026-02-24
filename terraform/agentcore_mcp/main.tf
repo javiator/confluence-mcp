@@ -106,6 +106,26 @@ resource "aws_lambda_permission" "allow_agentcore_gateway" {
   function_url_auth_type = "AWS_IAM"
 }
 
+# ──────────────────────────────────────────────────────────────────────────────
+# TERRAFORM LIMITATIONS FOR AGENTCORE (as of AWS provider v6.33.0)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# The AWS Terraform provider has incomplete support for AgentCore:
+#
+# 1. ✅ Lambda + Function URL work fine
+# 2. ⚠️  Gateway resource exists but Gateway Target has issues:
+#    - tool_schema block is required but empty blocks cause provider errors
+#    - MCP auto-discovery via tools/list is not supported in Terraform
+#    - Manual tool definitions would require hardcoding all 7 tools
+# 3. ❌ Agent Runtime resource is only for CODE-BASED agents, not PROMPT-BASED
+#
+# RECOMMENDATION: Use AWS Console or CLI for Gateway + Agent creation:
+#   - Gateway: AWS Console → Bedrock → AgentCore → Gateway
+#   - Agent: AWS Console → Bedrock → AgentCore → Create Agent Runtime
+#
+# Manual steps are documented in: AGENTCORE_MIGRATION.md (Steps 4-5)
+# ──────────────────────────────────────────────────────────────────────────────
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
 output "agentcore_mcp_ecr_url" {
@@ -122,3 +142,4 @@ output "agentcore_mcp_lambda_arn" {
   description = "Lambda ARN — needed for the IAM Gateway role policy"
   value       = aws_lambda_function.agentcore_mcp.arn
 }
+

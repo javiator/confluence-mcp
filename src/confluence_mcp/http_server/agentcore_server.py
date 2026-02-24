@@ -21,6 +21,11 @@ load_dotenv()
 
 # Import after load_dotenv so env vars are available during server.py initialization
 from confluence_mcp.server import (
+    BASE_URL,
+    EMAIL,
+    API_TOKEN,
+    ALLOWED_SPACES,
+    ALLOWED_PARENTS,
     _search_confluence,
     _get_confluence_page,
     execute_confluence_publish,
@@ -32,6 +37,15 @@ from confluence_mcp.server import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("confluence-agentcore-mcp")
+
+# Log configuration on startup
+logger.info("Initializing AgentCore MCP Server...")
+logger.info(f"Confluence Configuration:")
+logger.info(f"  BASE_URL: {BASE_URL[:15]}... (length={len(BASE_URL)})" if BASE_URL else "  BASE_URL: MISSING")
+logger.info(f"  EMAIL: {EMAIL[:3]}...{EMAIL[-3:]}" if EMAIL else "  EMAIL: MISSING")
+logger.info(f"  API_TOKEN: {'SET' if API_TOKEN else 'MISSING'}")
+logger.info(f"  ALLOWED_SPACES: {ALLOWED_SPACES}")
+logger.info(f"  ALLOWED_PARENTS: {ALLOWED_PARENTS}")
 
 app = FastAPI(title="Confluence AgentCore MCP Server")
 
@@ -188,6 +202,7 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/events")
 @app.post("/mcp")
 async def mcp_endpoint(request: Request):
     """
@@ -206,7 +221,39 @@ async def mcp_endpoint(request: Request):
 
     method = req_data.get("method")
     req_id = req_data.get("id")
-    logger.info(f"MCP request: method={method}")
+    
+    # Log headers and full request for debugging
+    logger.info(f"Headers: {dict(request.headers)}")
+    logger.info(f"MCP request: method={method}, req_id={req_id}")
+    logger.info(f"Request data: {json.dumps(req_data)}")
+
+    # Detect Gateway "Action" style call (direct arguments without MCP wrapper)
+    # Check for direct payload or tool name in headers
+    client_context_b64 = request.headers.get("x-amz-client-context")
+    tool_name_from_header = None
+    if client_context_b64:
+        try:
+            import base64
+            client_context = json.loads(base64.b64decode(client_context_b64).decode('utf-8'))
+            tool_name_from_header = client_context.get("custom", {}).get("bedrockAgentCoreToolName")
+            if tool_name_from_header:
+                logger.info(f"Inferred tool name from header: {tool_name_from_header}")
+        except Exception as e:
+            logger.warning(f"Failed to parse x-amz-client-context: {e}")
+
+    is_gateway_direct = method is None and (tool_name_from_header or "query" in req_data)
+    if is_gateway_direct:
+        logger.info("Detected Gateway direct tool call (Action style)")
+        tool_name = tool_name_from_header or "search_confluence"
+        method = "tools/call"
+        req_id = req_id or "gateway-direct"
+        req_data = {
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": req_data
+            }
+        }
 
     # ── initialize ────────────────────────────────────────────────────────────
     if method == "initialize":
