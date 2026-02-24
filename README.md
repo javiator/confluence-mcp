@@ -72,7 +72,7 @@ This builds the Docker image, pushes it to ECR, and updates the Lambda function.
 
 To update the AgentCore agent logic or environment variables:
 ```bash
-cd src/confluence_mcp.chat_appcore_runtime/docker_agent/agentcoreconfluence
+cd src/confluence_mcp/agentcore_runtime/docker_agent/agentcoreconfluence
 agentcore deploy --env BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
 ```
 
