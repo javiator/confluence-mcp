@@ -1,58 +1,90 @@
 # AgentCore Migration Guide
 
 This document covers every manual AWS step needed to move from the current
-local setup to a fully cloud-hosted architecture:
+local setup to a fully cloud-hosted architecture.
+
+## Architecture overview
 
 ```
 Chainlit (local)
   └─▶ AWS Bedrock AgentCore  (hosted agent + ReAct loop)
         └─▶ AgentCore Gateway  (MCP protocol proxy)
-              └─▶ Lambda: ConfluenceMCPServer  (HTTP MCP server)
+              └─▶ Lambda: ConfluenceAgentCoreMCP  (NEW — dedicated to AgentCore)
                     └─▶ Confluence REST API
 ```
 
-Prerequisites: AWS CLI configured, Docker installed, ECR/Lambda already
-created by Terraform (see `terraform/managed/`).
+## What this does NOT touch
+
+The following resources from the legacy 4-agent Bedrock Agents system are
+left completely untouched by everything in this guide:
+
+| Resource | Used by |
+|---|---|
+| `ConfluenceMCPServer` Lambda | Legacy Bedrock Agents (HTTP MCP experiment) |
+| `ConfluenceTools` Lambda | Legacy Bedrock Agents action groups |
+| 4× `aws_bedrockagent_agent` resources | Supervisor / Search / Writer / Reviewer agents |
+| ECR repo `confluence-mcp-server` | ConfluenceMCPServer image |
+
+The new AgentCore setup lives entirely in `terraform/agentcore_mcp/` with its
+own ECR repo, Lambda, IAM role, and Function URL.
 
 ---
 
-## Step 1 — Rebuild and deploy the Lambda MCP server
-
-The Docker image has been updated (`fastapi_server.py` now exposes the correct
-tool names and the full MCP protocol).  Push the new image and update Lambda.
+## Step 1 — Deploy the new Terraform resources
 
 ```bash
-# 1a. Get the ECR repo URL
-ECR_URL=$(aws ecr describe-repositories \
-  --repository-names confluence-mcp-server \
-  --query 'repositories[0].repositoryUri' \
-  --output text)
+cd terraform/agentcore_mcp
 
-echo "ECR URL: $ECR_URL"
+terraform init
+terraform apply
+```
 
-# 1b. Authenticate Docker to ECR
+This creates:
+- ECR repository: `confluence-agentcore-mcp`
+- Lambda function: `ConfluenceAgentCoreMCP`
+- IAM role: `ConfluenceAgentCoreMCPRole`
+- Lambda Function URL (IAM auth)
+
+Note the two output values — you will need them in the steps below:
+```
+agentcore_mcp_ecr_url        = "123456789.dkr.ecr.us-east-1.amazonaws.com/confluence-agentcore-mcp"
+agentcore_mcp_function_url   = "https://xxxx.lambda-url.us-east-1.on.aws/"
+agentcore_mcp_lambda_arn     = "arn:aws:lambda:us-east-1:123456789:function:ConfluenceAgentCoreMCP"
+```
+
+---
+
+## Step 2 — Build and push the AgentCore Docker image
+
+Use `Dockerfile.agentcore` (not the main `Dockerfile`) so the legacy Lambda
+is never touched.
+
+```bash
+# Run from the repo root
+ECR_URL=$(terraform -chdir=terraform/agentcore_mcp output -raw agentcore_mcp_ecr_url)
+
+# Authenticate Docker to ECR
 aws ecr get-login-password --region us-east-1 \
   | docker login --username AWS --password-stdin "$ECR_URL"
 
-# 1c. Build the image (run from the repo root)
-docker build -t confluence-mcp-server .
+# Build using the AgentCore-specific Dockerfile
+docker build -f Dockerfile.agentcore -t confluence-agentcore-mcp .
 
-# 1d. Tag and push
-docker tag confluence-mcp-server:latest "$ECR_URL:latest"
+# Tag and push
+docker tag confluence-agentcore-mcp:latest "$ECR_URL:latest"
 docker push "$ECR_URL:latest"
 
-# 1e. Update the Lambda function
+# Update the Lambda to use the new image
 aws lambda update-function-code \
-  --function-name ConfluenceMCPServer \
+  --function-name ConfluenceAgentCoreMCP \
   --image-uri "$ECR_URL:latest" \
   --region us-east-1
 ```
 
-Wait ~30 seconds for the update to propagate, then verify:
-
+Wait ~30 seconds, then verify:
 ```bash
 aws lambda get-function \
-  --function-name ConfluenceMCPServer \
+  --function-name ConfluenceAgentCoreMCP \
   --query 'Configuration.LastUpdateStatus' \
   --output text
 # Expected: Successful
@@ -60,211 +92,160 @@ aws lambda get-function \
 
 ---
 
-## Step 2 — Smoke-test the Lambda MCP endpoint
+## Step 3 — Verify the Lambda MCP endpoint
 
-Get the Lambda Function URL (already created by Terraform):
-
-```bash
-LAMBDA_URL=$(aws lambda get-function-url-config \
-  --function-name ConfluenceMCPServer \
-  --query 'FunctionUrl' \
-  --output text)
-
-echo "Lambda URL: $LAMBDA_URL"
-```
-
-Test the three MCP methods.  You will need to sign requests with AWS SigV4
-because the Function URL has `authorization_type = "AWS_IAM"`.  The easiest
-way is to use the AWS CLI with `--payload` and a Bedrock-aware caller, or
-temporarily switch auth to `NONE` for testing:
+The Function URL has IAM auth, so use `awscurl` for local testing
+(`pip install awscurl`):
 
 ```bash
-# Quick test without IAM auth (only if you temporarily set auth=NONE):
-curl -s -X POST "${LAMBDA_URL}mcp" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
+LAMBDA_URL=$(terraform -chdir=terraform/agentcore_mcp output -raw agentcore_mcp_function_url)
 
-curl -s -X POST "${LAMBDA_URL}mcp" \
+# tools/list — should return 7 tools
+awscurl --service lambda --region us-east-1 \
+  -X POST "${LAMBDA_URL}mcp" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | jq .
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-Expected `tools/list` response — 7 tools:
+Expected: 7 tools —
 `search_confluence`, `get_confluence_page`, `get_confluence_children`,
 `execute_confluence_publish`, `update_page_full`, `append_to_page`,
 `prepare_confluence_page_merge_update`.
 
-> **Tip**: For a proper SigV4-signed test from your local machine, use
-> `awscurl` (`pip install awscurl`) or the AWS SDK:
-> ```bash
-> awscurl --service lambda --region us-east-1 \
->   -X POST "${LAMBDA_URL}mcp" \
->   -H "Content-Type: application/json" \
->   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-> ```
-
 ---
 
-## Step 3 — Create the AgentCore Gateway
+## Step 4 — Create the AgentCore Gateway
 
-The Gateway is what connects AgentCore to your Lambda MCP server using the
-MCP protocol.
+The Gateway is what connects AgentCore to your Lambda using the MCP protocol.
 
-### 3a. Open the AWS Console
+### 4a. Open the AWS Console
 
-1. Go to **Amazon Bedrock** → left sidebar → **AgentCore** → **Gateway**
+1. **Amazon Bedrock** → left sidebar → **AgentCore** → **Gateway**
 2. Click **Create gateway**
 
-### 3b. Configure the gateway
+### 4b. Configure the gateway
 
 | Field | Value |
 |---|---|
-| Name | `confluence-mcp-gateway` |
+| Name | `confluence-agentcore-gateway` |
 | Protocol | **MCP** |
-| Endpoint URL | Your Lambda Function URL + `/mcp` (e.g. `https://xxxx.lambda-url.us-east-1.on.aws/mcp`) |
+| Endpoint URL | `<agentcore_mcp_function_url>mcp` (append `/mcp` to the Terraform output) |
 | Auth type | **IAM** |
 
-### 3c. IAM permissions
+### 4c. IAM role for the Gateway
 
-The Gateway needs permission to invoke the Lambda Function URL.
-Create or reuse an IAM role for the Gateway and attach:
+Create a new IAM role for the Gateway with this inline policy:
 
 ```json
 {
-  "Effect": "Allow",
-  "Action": "lambda:InvokeFunctionUrl",
-  "Resource": "<ConfluenceMCPServer Lambda ARN>"
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunctionUrl",
+      "Resource": "<agentcore_mcp_lambda_arn>"
+    }
+  ]
 }
 ```
 
-Also update the Lambda resource policy to allow the Gateway principal:
+The Lambda resource policy (`AllowAgentCoreGatewayInvoke`) was already added
+by Terraform in Step 1.
 
-```bash
-aws lambda add-permission \
-  --function-name ConfluenceMCPServer \
-  --statement-id AllowAgentCoreGateway \
-  --action lambda:InvokeFunctionUrl \
-  --principal bedrock-agentcore.amazonaws.com \
-  --function-url-auth-type AWS_IAM \
-  --region us-east-1
-```
+### 4d. Save the Gateway ARN
 
-### 3d. Save the Gateway ARN
-
-After creation, copy the Gateway ARN — you will need it in Step 4.
+After creation, copy the **Gateway ARN** — you need it in Step 5.
 
 ---
 
-## Step 4 — Create the AgentCore agent
+## Step 5 — Create the AgentCore agent
 
-### 4a. Open AgentCore agents
+### 5a. Open AgentCore agents
 
 1. **Amazon Bedrock** → **AgentCore** → **Agent runtimes**
 2. Click **Create agent runtime**
 
-### 4b. Basic settings
+### 5b. Basic settings
 
 | Field | Value |
 |---|---|
 | Name | `confluence-agent` |
 | Foundation model | `anthropic.claude-3-5-sonnet-20241022-v2:0` (or latest Sonnet) |
-| Description | Single-agent Confluence assistant |
 
-### 4c. System prompt
+### 5c. System prompt
 
-Copy the exact system prompt from `bedrock_graph.py` (`SYSTEM_PROMPT` constant)
-into the **Instructions** field.  It starts with:
+Copy the `SYSTEM_PROMPT` constant from
+`src/confluence_mcp/agent/bedrock_graph.py` into the **Instructions** field.
+It starts with:
 
 > *"You are an expert Confluence Assistant..."*
 
-### 4d. Tools / MCP Gateway
+### 5d. Connect the Gateway
 
-Under the **Tools** or **MCP connections** section:
-
+Under **Tools** or **MCP connections**:
 1. Click **Add tool source**
 2. Select **AgentCore Gateway**
-3. Choose the `confluence-mcp-gateway` you created in Step 3
-4. The agent will automatically discover all 7 tools via `tools/list`
+3. Choose `confluence-agentcore-gateway` (created in Step 4)
+4. The agent will discover all 7 tools automatically via `tools/list`
 
-### 4e. Create and prepare
+### 5e. Create an alias
 
 1. Click **Create**
-2. Once status is **Prepared**, click **Create alias**
-3. Set alias name: `live`
-4. Copy both the **Agent ID** and **Alias ID**
+2. Once status shows **Prepared**, click **Create alias**
+3. Alias name: `live`
+4. Copy the **Agent ID** and **Alias ID**
 
 ---
 
-## Step 5 — Update your local `.env`
+## Step 6 — Update your local `.env`
 
 ```bash
-# In your .env file (copy .env.example if you haven't already):
 USE_AGENTCORE=true
-AGENTCORE_AGENT_ID=<paste Agent ID from Step 4e>
-AGENTCORE_AGENT_ALIAS_ID=<paste Alias ID from Step 4e>
+AGENTCORE_AGENT_ID=<Agent ID from Step 5e>
+AGENTCORE_AGENT_ALIAS_ID=<Alias ID from Step 5e>
 ```
-
-Leave all other values (`CONFLUENCE_*`, AWS credentials) as they are.
 
 ---
 
-## Step 6 — Test end-to-end
-
-Start Chainlit as usual:
+## Step 7 — Test end-to-end
 
 ```bash
 uv run chainlit run src/confluence_mcp/agent/app.py
 ```
 
-Send a test message:
-
-> *"Search for pages about Docker in space ENG"*
+Send: *"Search for pages about Docker in space ENG"*
 
 You should see:
-- No local MCP subprocess starts up
-- Chainlit displays the response from the AgentCore agent
-- The agent called `search_confluence` via the Lambda through the Gateway
+- No local MCP subprocess starts
+- Response comes from AgentCore via Lambda → Confluence
+- The legacy Bedrock Agents system is completely unaffected
 
 ---
 
 ## Switching back to local mode
 
-Set `USE_AGENTCORE=false` in `.env` (or remove the variable).  The app falls
-back to `bedrock_graph.py` + local stdio MCP, exactly as it worked before.
+```bash
+USE_AGENTCORE=false
+```
+
+The app falls back to `bedrock_graph.py` + local stdio MCP — exactly as before.
 
 ---
 
-## Architecture diagram
+## Resource inventory
 
-```
-Your laptop
-  ├── Chainlit UI (app.py)
-  │     │  USE_AGENTCORE=true
-  │     ▼
-  │  boto3 bedrock-agent-runtime.invoke_agent()
-  │     │
-  └─────┼─────────────────────────────────────────▶ AWS
-        │
-        ▼
-  AgentCore Agent Runtime
-    system prompt: SYSTEM_PROMPT from bedrock_graph.py
-    model: Claude Sonnet (via Bedrock)
-    ReAct loop: managed by AgentCore
-        │
-        │ MCP tool calls
-        ▼
-  AgentCore Gateway
-    protocol: MCP over HTTPS
-    auth: IAM SigV4
-        │
-        ▼
-  Lambda: ConfluenceMCPServer
-    runtime: fastapi_server.py (Docker / Lambda Web Adapter)
-    tools: 7 MCP tools
-        │
-        ▼
-  Confluence REST API
-```
+| Resource name | File | Notes |
+|---|---|---|
+| ECR: `confluence-agentcore-mcp` | `terraform/agentcore_mcp/main.tf` | New |
+| Lambda: `ConfluenceAgentCoreMCP` | `terraform/agentcore_mcp/main.tf` | New |
+| Docker image | `Dockerfile.agentcore` | New — does NOT affect main `Dockerfile` |
+| MCP server code | `agentcore_server.py` | New — does NOT affect `fastapi_server.py` |
+| AgentCore Gateway | AWS Console (Step 4) | New |
+| AgentCore agent | AWS Console (Step 5) | New |
+| ECR: `confluence-mcp-server` | `terraform/managed/mcp_server.tf` | **Unchanged** |
+| Lambda: `ConfluenceMCPServer` | `terraform/managed/mcp_server.tf` | **Unchanged** |
+| Lambda: `ConfluenceTools` | `terraform/managed/main.tf` | **Unchanged** |
+| 4× Bedrock Agents | `terraform/managed/main.tf` | **Unchanged** |
 
 ---
 
@@ -272,9 +253,8 @@ Your laptop
 
 | Symptom | Check |
 |---|---|
-| `AGENTCORE_AGENT_ID is not set` error in Chainlit | Add `AGENTCORE_AGENT_ID` to `.env` and restart |
-| Gateway returns 403 | Lambda resource policy missing `AllowAgentCoreGateway` — re-run Step 3d |
-| `tools/list` returns 0 tools | Lambda image not updated — repeat Step 1 |
-| Agent responds but doesn't call tools | System prompt missing — verify Step 4c |
-| Lambda cold-start timeout | Increase Lambda timeout in Terraform (`timeout = 120`) and redeploy |
-| `append_to_page` was broken locally | Fixed: `body` → `page_content_xhtml` bug in `server.py` is resolved |
+| `AGENTCORE_AGENT_ID is not set` in Chainlit | Add to `.env` and restart |
+| Gateway returns 403 | IAM Gateway role missing `lambda:InvokeFunctionUrl` permission |
+| `tools/list` returns 0 tools | Lambda image not pushed — repeat Step 2 |
+| Agent responds but ignores tools | System prompt missing — verify Step 5c |
+| Lambda cold-start timeout | Increase `timeout` in `terraform/agentcore_mcp/main.tf` and re-apply |
