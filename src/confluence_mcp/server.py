@@ -558,7 +558,7 @@ def append_to_page(page_id: str, page_content_xhtml: str = "") -> Dict[str, Any]
         current_body = data.get("body", {}).get("storage", {}).get("value", "")
 
         # Sanitize and merge
-        sanitized_new = robust_sanitize_confluence_xhtml(body)
+        sanitized_new = robust_sanitize_confluence_xhtml(page_content_xhtml)
         merged_body = current_body + "\n" + sanitized_new
 
         payload = {
