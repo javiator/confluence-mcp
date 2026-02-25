@@ -1,0 +1,32 @@
+# Dockerfile for the AgentCore MCP Lambda.
+#
+# This is intentionally separate from the main Dockerfile (which builds
+# ConfluenceMCPServer used by the legacy 4-agent Bedrock Agents system).
+# Changes here do NOT affect that Lambda.
+
+FROM python:3.11-slim
+
+# Copy Lambda Web Adapter binary from the official ECR image
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements-server.txt .
+RUN pip install --no-cache-dir -r requirements-server.txt
+
+# Copy the server source code
+COPY src/mcp_server/ src/mcp_server/
+
+# Copy configuration
+COPY config.json .
+
+# Configuration for Lambda Web Adapter
+ENV PORT=8000
+ENV PYTHONPATH="/app/src"
+ENV READINESS_CHECK_PATH="/health"
+
+EXPOSE 8000
+
+# Start the AgentCore MCP server
+CMD ["uvicorn", "mcp_server.http_server.agentcore_server:app", "--host", "0.0.0.0", "--port", "8000"]
