@@ -1,5 +1,6 @@
 import os
 import asyncio
+import threading
 import uuid
 import json
 from datetime import datetime
@@ -158,68 +159,112 @@ async def on_message(message: cl.Message):
 
 async def _run_agentcore(user_message: str, session_id: str):
     """
-    Invoke the hosted AgentCore agent.
+    Invoke the hosted AgentCore agent with live token streaming.
 
-    AgentCore manages the full ReAct loop and tool calls (via the Gateway
-    pointing at the Lambda MCP server).  We just pass the user message and
-    collect the streamed response.
+    The runtime's async-generator entrypoint yields tokens as SSE events
+    (data: "<token>"\\n\\n).  We parse those on a background thread and feed
+    them into an asyncio.Queue so Chainlit can call stream_token() in real time.
+
+    Falls back to reading the full body when the runtime returns plain JSON
+    (e.g. old deployment still in place while the new image is rolling out).
     """
     if not AGENTCORE_AGENT_ID:
         await cl.Message(
-            content="⚠️ AGENTCORE_AGENT_ID is not set in your .env file. See AGENTCORE_MIGRATION.md.",
+            content="⚠️ AGENTCORE_AGENT_ID is not set in your .env file.",
             author="System"
         ).send()
         return
 
     bedrock_client = cl.user_session.get("bedrock_client")
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
 
-    try:
-        # boto3 invoke_agent_runtime is synchronous — run it in a thread so we don't
-        # block the Chainlit event loop.  We also consume the StreamingBody
-        # inside the thread so the blocking I/O never touches the event loop.
-        def _call_agent():
+    def _stream():
+        """
+        Blocking I/O lives entirely in this thread.
+        Parsed tokens are pushed onto the asyncio Queue via call_soon_threadsafe.
+        A sentinel None signals the consumer that the stream is done.
+        """
+        try:
             resp = bedrock_client.invoke_agent_runtime(
                 agentRuntimeArn=AGENTCORE_AGENT_ID,
                 qualifier=AGENTCORE_AGENT_ALIAS_ID,
                 runtimeSessionId=session_id,
                 payload=json.dumps({
                     "prompt": user_message,
-                    "sessionId": session_id
+                    "sessionId": session_id,
                 }),
                 contentType="application/json",
             )
-            # response["response"] is a StreamingBody; read it fully in the thread.
-            return resp["response"].read().decode("utf-8")
+            content_type = resp.get("contentType", "")
+            body = resp["response"]
 
-        final_content = await asyncio.to_thread(_call_agent)
+            if "text/event-stream" in content_type:
+                # SSE format: each event arrives as "data: <json>\n"
+                # iter_lines() strips newlines and yields each non-empty line.
+                for raw_line in body.iter_lines(chunk_size=256):
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8")
+                    if not line.startswith("data: "):
+                        continue
+                    try:
+                        token = json.loads(line[6:])
+                        if isinstance(token, str) and token:
+                            loop.call_soon_threadsafe(queue.put_nowait, token)
+                    except json.JSONDecodeError:
+                        pass
+            else:
+                # Non-streaming fallback: runtime returned plain JSON.
+                # Unwrap {"result": "..."} if present.
+                raw = body.read().decode("utf-8")
+                try:
+                    parsed = json.loads(raw)
+                    content = (
+                        parsed.get("result")
+                        or parsed.get("message")
+                        or raw
+                    )
+                except json.JSONDecodeError:
+                    content = raw
+                if content:
+                    loop.call_soon_threadsafe(queue.put_nowait, content)
 
-        # Clean up JSON wrapping if present
-        display_content = final_content
-        try:
-            # The agent often returns a JSON string like {"result": "..."}
-            parsed = json.loads(final_content)
-            if isinstance(parsed, dict) and "result" in parsed:
-                display_content = parsed["result"]
-            elif isinstance(parsed, dict) and "message" in parsed:
-                display_content = parsed["message"]
-        except json.JSONDecodeError:
-            # Not JSON or partial JSON, use as is
-            pass
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            loop.call_soon_threadsafe(queue.put_nowait, f"❌ AgentCore error: {e}")
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
-        if not display_content:
-            display_content = "✅ Done (no text response returned)."
+    threading.Thread(target=_stream, daemon=True).start()
 
-        await cl.Message(content=display_content, author="Confluence AI").send()
+    msg = cl.Message(content="", author="Confluence AI")
+    await msg.send()
 
-        # Persist to local memory for Chainlit session resume
-        history = cl.user_session.get("history", [])
-        history.append(AIMessage(content=final_content))
-        cl.user_session.set("history", history)
+    full_content = ""
+    try:
+        while True:
+            token = await asyncio.wait_for(queue.get(), timeout=300)
+            if token is None:
+                break
+            full_content += token
+            await msg.stream_token(token)
+    except asyncio.TimeoutError:
+        await msg.stream_token("\n\n⚠️ Response timed out after 5 minutes.")
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        await cl.Message(content=f"❌ AgentCore error: {str(e)}").send()
+    await msg.update()
+
+    if not full_content.strip():
+        await msg.update()  # already sent; just ensure it's visible
+        # Patch the empty message so the user sees something
+        msg.content = "✅ Done (no text response returned)."
+        await msg.update()
+
+    # Persist to local Chainlit session history for resume
+    history = cl.user_session.get("history", [])
+    history.append(AIMessage(content=full_content))
+    cl.user_session.set("history", history)
 
 
 async def _run_local(user_message: str, session_id: str, history: list):
