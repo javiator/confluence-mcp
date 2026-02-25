@@ -1,5 +1,9 @@
-# Use the official Python managed image for Lambda or a slim debian base
-# Using slim-buster for compatibility with the Lambda Web Adapter
+# Dockerfile for the AgentCore MCP Lambda.
+#
+# This is intentionally separate from the main Dockerfile (which builds
+# ConfluenceMCPServer used by the legacy 4-agent Bedrock Agents system).
+# Changes here do NOT affect that Lambda.
+
 FROM python:3.11-slim
 
 # Copy Lambda Web Adapter binary from the official ECR image
@@ -11,7 +15,8 @@ WORKDIR /app
 COPY requirements-server.txt .
 RUN pip install --no-cache-dir -r requirements-server.txt
 
-COPY src/ src/
+# Copy the server source code
+COPY src/mcp_server/ src/mcp_server/
 
 # Copy configuration
 COPY config.json .
@@ -21,9 +26,7 @@ ENV PORT=8000
 ENV PYTHONPATH="/app/src"
 ENV READINESS_CHECK_PATH="/health"
 
-# Expose port (metadata)
 EXPOSE 8000
 
-# Start the uvicorn server
-# The Web Adapter will proxy Lambda events to this HTTP server
-CMD ["uvicorn", "confluence_mcp.http_server.fastapi_server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the AgentCore MCP server
+CMD ["uvicorn", "mcp_server.http_server.agentcore_server:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -6,11 +6,11 @@
 
 ## 🎯 Current Status
 
-**Current Phase**: Phase 4 - Experiment: AWS Bedrock 🟡 In Progress
-**Current Branch**: `claude/phase-4-ceArC`
+**Current Phase**: Phase 5 - Experiment: Google Vertex ⚪ Not Started
+**Current Branch**: `claude/understand-project-setup-1suZ6`
 **Started**: 2026-02-21
-**Completed**: 
-**Status**: 🟡 In Progress - Environment and tracking setup
+**Completed**: 2026-02-24
+**Status**: 🟢 Phase 4 Complete - AgentCore + Chainlit integration stabilized.
 
 ---
 
@@ -22,7 +22,7 @@
 | **Phase 1** | First Multi-Agent (LangGraph) | 1 week | 🟢 Complete | `claude/phase-1-ceArC` | 13/13 tests passing |
 | **Phase 2** | Intelligence & Memory | 1 day | 🟢 Complete | `claude/phase-2-ceArC` | 12/12 tests passing |
 | **Phase 3** | Experiment: CrewAI | 1 day | 🟢 Complete | `claude/phase-3-ceArC` | Role-based agents working |
-| **Phase 4** | Experiment: AWS Bedrock | 1 week | 🟡 In Progress | `claude/phase-4-ceArC` | Setting up Bedrock Agent |
+| **Phase 4** | Experiment: AWS Bedrock | 1 week | 🟢 Complete | `claude/understand-project-setup-1suZ6` | Native mas with AgentCore |
 | **Phase 5** | Experiment: Google Vertex | 1 week | ⚪ Pending | `claude/phase-5-ceArC` | |
 | **Phase 6** | Framework Decision | 2-3 days | ⚪ Pending | `claude/phase-6-ceArC` | |
 | **Phase 7** | Production Build | 2 weeks | ⚪ Pending | `claude/phase-7-ceArC` | |
@@ -123,9 +123,10 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 4. Comparison document
 
 **When to Consider Complete**:
-- [ ] Agent completes full search → write → review cycle via AWS Bedrock
-- [ ] Lambda functions successfully bridge to MCP Server Logic
-- [ ] Comparison document finalized
+- [x] Agent completes full search → write → review cycle via AWS Bedrock ✅
+- [x] Lambda functions successfully bridge to MCP Server Logic ✅
+- [x] Implement persistent session memory via payload-injected `sessionId` ✅
+- [x] Optimize costs using Claude 3 Haiku and configurable model logic ✅
 
 ## 🎓 Learning Log
 
@@ -184,7 +185,12 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
   - **Cons**: Debugging threading is hard, stateless tasks require manual memory management, less control than Graph
   - **Best for**: Content teams, research pipelines, autonomous sequential tasks
   - **Verdict so far**: Excellent for speed of development; LangGraph better for complex state/human-gates
-- **AWS Bedrock**: [Phase 4 - To be explored]
+- **AWS Bedrock**: ✅ Phase 4 Complete
+  - **Pros**: Zero-infrastructure management (AgentCore handles the loop), native AWS security, extremely scalable, managed memory.
+  - **Cons**: Debugging runtime crashes can be difficult (CloudWatch logs are the only view), rigid container environment requires redeploy for code changes.
+  - **Best for**: Production enterprise applications, high-security environments, systems requiring long-term managed memory.
+  - **Verdict**: The most robust and production-ready option yet.
+
 - **Google Vertex**: [Phase 5 - To be explored]
 
 ---

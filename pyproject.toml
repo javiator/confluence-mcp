@@ -38,10 +38,10 @@ dependencies = [
 ]
 
 [project.scripts]
-confluence-mcp = "confluence_mcp:main"
+confluence-mcp = "mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/confluence_mcp"]
+packages = ["src/mcp_server", "src/chat_app"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"

@@ -3,7 +3,7 @@ Phase 0: Foundation Tests
 Test current capabilities to establish baseline
 """
 import pytest
-from confluence_mcp.server import mcp
+from mcp_server.server import mcp
 
 def test_environment_setup():
     """Verify environment is set up correctly"""

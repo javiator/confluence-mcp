@@ -10,4 +10,5 @@ if [ -f .env ]; then
 fi
 
 # Start Chainlit with remote access enabled and headless mode to avoid VS Code browser hook errors
-uv run chainlit run src/confluence_mcp/agent/app.py -w --headless --host 0.0.0.0 --port 8000
+echo "Starting Chainlit Agent interface..."
+uv run chainlit run src/chat_app/app.py -w --headless --host 0.0.0.0 --port 8000

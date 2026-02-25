@@ -30,6 +30,6 @@ We use a strict branch-per-phase strategy. We never build Phase 3 on the `main` 
 1. `PHASE_TRACKER.md` - Your source of truth for "Where are we right now?"
 2. `ROADMAP.md` / `ROADMAP_SUMMARY.md` - "What are we building?"
 3. `GIT_BRANCHING_STRATEGY.md` - "How do we manage versions?"
-4. `src/confluence_mcp/agent/` - "Where does the agent code live?"
+4. `src/confluence_mcp.chat_app/` - "Where does the agent code live?"
 
 **Ready?** Check `PHASE_TRACKER.md` now and ask the user how you can help with the current phase!

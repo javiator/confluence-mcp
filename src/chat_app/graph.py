@@ -2,9 +2,9 @@ from typing import Annotated, Literal, TypedDict, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-from confluence_mcp.agent.client import MCPClient
-from confluence_mcp.agent.llm import get_llm
-from confluence_mcp.agent.entities import extract_entities_from_tool_result, format_entity_context
+from chat_app.client import MCPClient
+from chat_app.llm import get_llm
+from chat_app.entities import extract_entities_from_tool_result, format_entity_context
 
 # ── State ──────────────────────────────────────────────────────────────────────
 

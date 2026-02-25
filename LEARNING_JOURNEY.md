@@ -127,7 +127,7 @@ All Python commands use **[uv](https://github.com/astral-sh/uv)** - the fast Pyt
 # Run with uv
 uv run confluence-mcp
 uv run pytest tests/
-uv run chainlit run src/confluence_mcp/agent/app.py
+uv run chainlit run src/confluence_mcp.chat_app/app.py
 ```
 
 ### Git Strategy: Phase Branches

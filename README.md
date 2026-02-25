@@ -12,138 +12,69 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Get Children**: Retrieve direct child pages of a specific page. Useful for navigating the hierarchy when search is unreliable.
 - **Configurable Access Control**: Permissions are defined in `config.json`, not hardcoded.
 
-## ☁️ Phase 4: Full AWS Serverless Migration
+- **Cloud-Native**: Powered by **AWS Bedrock AgentCore** for managed multi-agent orchestration.
+- **Search**: Find pages using Confluence Query Language (CQL), with improved logic for complex queries.
+- **Read/Write/Update**: Full CRUD capabilities with safety checks (AI-managed labels).
+- **Session Memory**: In-container conversation history (resets on cold start; persistent memory can be added via `AGENTCORE_MEMORY_ID`).
+- **Cost Optimized**: Dynamic support for Claude 3 Haiku and Amazon Nova Lite.
 
-The project has transitioned to a fully native AWS serverless architecture. The MCP Server now runs as a containerized Lambda function, eliminating the need for local processes or persistent tunnels.
+## 📚 Documentation Guides
 
-- **Zero Local Dependency**: Native cloud execution via AWS Lambda.
-- **IAM-Authenticated**: Secure communication using `boto3.invoke` (Internal AWS Bridge).
-- **SSM-Backed**: Secrets managed securely in AWS Parameter Store.
+For detailed instructions, see the dedicated documentation:
+- **[Usage & Deployment Guide](docs/USAGE_GUIDE.md)**: How to deploy from scratch, useful AgentCore CLI commands, daily usage, and complete AWS teardown instructions.
+- **[AgentCore Architecture](docs/BEDROCK_AGENT_ARCHITECTURE.md)**: Deep dive into the cloud-native routing and design.
+- **[AgentCore Manual Setup](docs/AGENTCORE_SETUP.md)**: Manual AWS console steps and troubleshooting for the hosted runtime.
 
-**View the detailed architecture guide:** [docs/PHASE_4_SERVERLESS_ARCHITECTURE.md](docs/PHASE_4_SERVERLESS_ARCHITECTURE.md)
+## ☁️ Architecture: AWS Bedrock AgentCore
 
-## 🧭 Phase 4.3: Bedrock Multi-Agent System (MAS)
+The project has transitioned to a high-performance, cloud-native architecture. 
 
-The project now supports a sophisticated Multi-Agent System using native AWS Bedrock capabilities. This includes specialized agents for Search, Writing, and Quality Review.
+1. **MCP Server**: Containerized Lambda function serving as the "Action Group" for Bedrock.
+2. **Bedrock AgentCore**: Hosted runtime orchestrating the agent logic and memory.
+3. **Chainlit UI**: Local/Remote frontend that communicates with the cloud runtime.
 
-**View the dedicated MAS guide:** [docs/PHASE_4_3_BEDROCK_MAS.md](docs/PHASE_4_3_BEDROCK_MAS.md)
+**Key Components:**
+- **[server.py](src/mcp_server/server.py)**: The core MCP tool definitions.
+- **[main.py](agentcore_runtime/src/main.py)**: The AgentCore runtime entrypoint (LangGraph ReAct loop).
+- **[app.py](src/chat_app/app.py)**: The Chainlit frontend.
 
-## Installation
+## 🚀 Getting Started
 
-### Option 1: Install via pip (Recommended)
+### 1. Prerequisites
+- AWS Account with Bedrock access.
+- Confluence API Token.
+- Python 3.10+ (recommend using `uv`).
 
-You can install the package directly if you have it locally or from a git repo:
-
+### 2. Configuration
+Create a `.env` file from `.env.example`:
 ```bash
-pip install .
+USE_AGENTCORE=true
+AGENTCORE_AGENT_ID=arn:aws:bedrock-agentcore:...
+CONFLUENCE_GATEWAY_URL=https://...
 ```
 
-### Option 2: Install via uv (Fastest)
-
-If you use [uv](https://github.com/astral-sh/uv), you can install dependencies and run the project efficiently.
-
-```bash
-uv pip install .
-```
-
-### Option 3: Run from source
-
-1.  Clone the repository.
-2.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *Note: `requirements.txt` is provided for convenience, but `pyproject.toml` is the source of truth.*
-
-## Configuration
-
-### 1. Environment Variables
-
-The server requires the following environment variables for authentication:
-
-*   `CONFLUENCE_BASE_URL`: Base URL of your Confluence instance (e.g., `https://your-domain.atlassian.net/wiki`).
-*   `CONFLUENCE_EMAIL`: Your Atlassian account email.
-*   `CONFLUENCE_API_TOKEN`: Your Atlassian API token.
-
-For the **Agent**, you also need LLM keys:
-*   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`.
-
-### 2. Access Control (`config.json`)
-
-Create a `config.json` file in the directory where you will run the server. You can copy `config.example.json` as a starting point.
-
-```json
-{
-  "allowed_spaces": ["AR", "ENG", "KB"],
-  "allowed_parents": {
-    "AR": ["2424881", "2490466"],
-    "ENG": ["223344"],
-    "KB": ["998877"]
-  }
-}
-```
-
-*   **allowed_spaces**: List of space keys the AI can access.
-*   **allowed_parents**: Dictionary mapping space keys to a list of Page IDs.
-    *   **For Creation**: New pages can *only* be created as children of these IDs.
-    *   **For Search**: Search results are restricted to *only* these IDs.
-
-The server looks for `config.json` in the following order:
-1.  Path specified by `CONFLUENCE_MCP_CONFIG` environment variable.
-2.  Current working directory.
-3.  Package directory (fallback).
-
-## Usage
-
-### Running the MCP Server
-
-**Standard:**
-```bash
-confluence-mcp
-```
-
-**With uv:**
-```bash
-uv run confluence-mcp
-```
-
-### Running the Conversational Agent
-
-This project includes a **Chainlit** agent that connects to the MCP server.
-
-**Using the launcher script (recommended):**
+### 3. Launching the UI
+The easiest way to start the system is via the launcher script:
 ```bash
 ./start_agent.sh
 ```
+This launches the Chainlit interface on `http://localhost:8000`.
 
-This automatically starts the agent with remote access enabled.
+---
 
-**Manual start (local access only):**
+## 🛠️ Deployment
+
+To deploy the MCP server to AWS:
 ```bash
-chainlit run src/confluence_mcp/agent/app.py -w
+./scripts/deploy_agentcore_mcp.sh
 ```
+This builds the Docker image, pushes it to ECR, and updates the Lambda function.
 
-**Manual start with remote access:**
+To update the AgentCore agent logic or environment variables:
 ```bash
-chainlit run src/confluence_mcp/agent/app.py -w --host 0.0.0.0 --port 8000
+cd agentcore_runtime
+agentcore deploy --env BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
 ```
-
-**With uv:**
-```bash
-uv run chainlit run src/confluence_mcp/agent/app.py -w --host 0.0.0.0 --port 8000
-```
-
-**Access URLs:**
-- Local: `http://localhost:8000`
-- Remote: `http://<your-ip>:8000` (e.g., `http://192.168.0.179:8000`)
-
-**Features:**
-- 🎤 Voice input (using Google Gemini for transcription)
-- 🔍 Smart search with ancestor filtering
-- 📝 Create and update Confluence pages
-- 💬 Natural language interface
-- 🎯 Starter prompts for common tasks
-- 📜 **Multi-session chat history** - Resume previous conversations anytime (see [CHAT_HISTORY.md](docs/CHAT_HISTORY.md))
 
 ### Connecting to an MCP Client
 

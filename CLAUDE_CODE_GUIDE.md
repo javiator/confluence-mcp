@@ -41,7 +41,7 @@ Use the existing [file/pattern] as a reference."
 
 **Example**:
 ```
-"Create a SearchAgent class in src/confluence_mcp/agent/agents/search_agent.py
+"Create a SearchAgent class in src/confluence_mcp.chat_app/agents/search_agent.py
 that specializes in Confluence search. Use the existing graph.py as a reference
 for the agent pattern."
 ```
