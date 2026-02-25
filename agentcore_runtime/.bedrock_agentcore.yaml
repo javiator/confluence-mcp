@@ -32,16 +32,16 @@ agents:
     bedrock_agentcore:
       agent_id: agentcoreconfluence_agent-TpNYJW6yK2
       agent_arn: arn:aws:bedrock-agentcore:us-east-1:383226947124:runtime/agentcoreconfluence_agent-TpNYJW6yK2
-      agent_session_id: null
+      agent_session_id: verification-session-id-0000000000004
     codebuild:
       project_name: bedrock-agentcore-agentcoreconfluence_agent-builder
       execution_role: arn:aws:iam::383226947124:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-d2e0ea7bf8
       source_bucket: bedrock-agentcore-codebuild-sources-383226947124-us-east-1
     memory:
-      mode: NO_MEMORY
-      memory_id: null
+      mode: STM_AND_LTM
+      memory_id: confluence_memory-L0EwKGFITE
       memory_arn: null
-      memory_name: null
+      memory_name: confluence_memory
       event_expiry_days: 30
       first_invoke_memory_check_done: false
       was_created_by_toolkit: false

@@ -15,6 +15,7 @@ dependencies = [
     "langchain-mcp-adapters >= 0.1.11",
     "langchain_aws >= 0.2.0",
     "langgraph >= 0.2.0",
+    "langgraph-checkpoint-aws >= 1.0.1",
     "mcp >= 1.19.0",
     "mcp-proxy-for-aws >= 0.1.0",
     "pytest >= 7.0.0",

@@ -113,8 +113,8 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 **Tasks**:
 - [x] Set up AWS Bedrock Agents (Infrastructure as Code)
 - [x] Create Lambda functions for tools (MCP to Lambda bridge)
-- [ ] Deploy and test Bedrock Agent
-- [ ] Compare with local frameworks (LangGraph, CrewAI)
+- [x] Deploy and test Bedrock Agent
+- [x] Compare with local frameworks (LangGraph, CrewAI)
 
 **Key Deliverables**:
 1. Deployed AWS Bedrock Agent
@@ -125,7 +125,8 @@ All deliverables done. 3/3 tests passing. See `docs/PHASE0_NOTES.md` for full au
 **When to Consider Complete**:
 - [x] Agent completes full search → write → review cycle via AWS Bedrock ✅
 - [x] Lambda functions successfully bridge to MCP Server Logic ✅
-- [x] Implement persistent session memory via payload-injected `sessionId` ✅
+- [x] Implement persistent session memory via `AgentCoreMemorySaver` checkpointer ✅
+- [x] Real-time token streaming supported natively in local Chainlit UI ✅
 - [x] Optimize costs using Claude 3 Haiku and configurable model logic ✅
 
 ## 🎓 Learning Log

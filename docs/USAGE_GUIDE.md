@@ -33,7 +33,7 @@ The logic, memory, and orchestration run as a natively hosted AWS Bedrock AgentC
 ```bash
 cd agentcore_runtime
 # Deploy to AWS Bedrock
-agentcore deploy --env BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+agentcore deploy --env BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0 --env AGENTCORE_MEMORY_ID=your-memory-id
 ```
 
 ### D. Connect the Agent to the MCP Server
@@ -55,6 +55,7 @@ To chat with your hosted agent using the Chainlit web UI:
    ```env
    USE_AGENTCORE=true
    AGENTCORE_AGENT_ID=arn:aws:bedrock-agentcore:us-east-1:123456789:runtime/your-agent-id
+   AGENTCORE_MEMORY_ID=your-memory-id
    ```
 2. Launch the server:
    ```bash

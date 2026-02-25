@@ -15,7 +15,8 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Cloud-Native**: Powered by **AWS Bedrock AgentCore** for managed multi-agent orchestration.
 - **Search**: Find pages using Confluence Query Language (CQL), with improved logic for complex queries.
 - **Read/Write/Update**: Full CRUD capabilities with safety checks (AI-managed labels).
-- **Session Memory**: In-container conversation history (resets on cold start; persistent memory can be added via `AGENTCORE_MEMORY_ID`).
+- **Session Memory**: Persistent multi-turn conversation history powered by **AWS Bedrock AgentCore Memory** and the standard LangGraph checkoutpointer (`langgraph-checkpoint-aws`).
+- **Real-Time Streaming**: Instant, token-by-token response streaming to the Chainlit interface for a highly responsive UX.
 - **Cost Optimized**: Dynamic support for Claude 3 Haiku and Amazon Nova Lite.
 
 ## 📚 Documentation Guides

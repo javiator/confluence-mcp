@@ -36,7 +36,7 @@ You (Chainlit)
 The system uses a **hosted runtime** model. Unlike local agents where the loop runs on your machine, the entire thinking process, tool selection, and conversation memory happen natively inside AWS Bedrock.
 
 ### Key Advantages
-- **Managed Memory**: Session history is handled by Bedrock, persisting across frontend restarts.
+- **Managed Memory**: Session history is handled by AWS Bedrock AgentCore Memory, persisting across frontend restarts. The orchestrator uses the native `AgentCoreMemorySaver` from `langgraph-checkpoint-aws` to seamlessly load and save state at the end of each turn.
 - **Serverless Scaling**: The orchestrator and the tools are fully serverless (AgentCore + Lambda).
 - **Security**: IAM-based authentication secures every hop from the Gateway to the Lambda.
 

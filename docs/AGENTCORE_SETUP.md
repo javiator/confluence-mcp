@@ -36,6 +36,13 @@ terraform apply
 3. **Gateway**: Connect the gateway created above.
 4. **Alias**: Create an alias (e.g., `live`) and note the **Agent ID** and **Alias ID**.
 
+#### Memory Setup (Optional but Recommended)
+For persistent conversation history across sessions:
+1. **Bedrock Console** → **AgentCore** → **Memory** → **Create**.
+2. **Name**: Provide a name (e.g., `confluence_memory`).
+3. Note the generated **Memory ID** (e.g., `confluence_memory-L0EwKGF...`).
+4. Add it to your `.env` file as `AGENTCORE_MEMORY_ID` and to your deployment command or `.bedrock_agentcore.yaml`.
+
 ## 🔧 Troubleshooting
 
 | Symptom | Check |
