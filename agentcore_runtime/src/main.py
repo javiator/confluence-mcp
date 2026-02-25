@@ -2,7 +2,7 @@ import logging
 import os
 import json
 import boto3
-from typing import List, Dict, Any, Union, Optional, Annotated, TypedDict
+from typing import List, Dict, Any, Union, Annotated, TypedDict
 
 os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION", "us-east-1")
 
@@ -13,34 +13,22 @@ logger.setLevel(logging.INFO)
 # ── Implementation of missing SDK components ──────────────────────────────────
 
 class MemoryClient:
-    """Manages session history using bedrock-agentcore SDK and local fallback."""
-    def __init__(self, memory_id: Optional[str] = None):
-        self.memory_id = memory_id
-        self._local_history = {}
-        self.manager = None
-        if memory_id:
-            try:
-                from bedrock_agentcore.memory import MemorySessionManager
-                self.manager = MemorySessionManager(memory_id=memory_id)
-                logger.info(f"Initialized MemorySessionManager with ID: {memory_id}")
-            except Exception as e:
-                logger.error(f"Failed to load MemorySessionManager: {e}")
+    """
+    In-container session history.
+    Resets on container restart / cold start.
+    To add persistent memory, configure AGENTCORE_MEMORY_ID and wire up
+    bedrock_agentcore.memory.MemorySessionManager here.
+    """
+    def __init__(self):
+        self._history: Dict[str, List[Dict[str, Any]]] = {}
 
     def get_session_history(self, session_id: str) -> List[Dict[str, Any]]:
-        if self.manager:
-            try:
-                # In a real scenario, we'd fetch from session.list_events()
-                # For now, we use the local fallback to ensure stability
-                pass
-            except Exception as e:
-                logger.warning(f"Failed to fetch from memory service: {e}")
-        
-        return self._local_history.get(session_id, [])
+        return self._history.get(session_id, [])
 
     def save_message(self, session_id: str, role: str, content: str):
-        if session_id not in self._local_history:
-            self._local_history[session_id] = []
-        self._local_history[session_id].append({"role": role, "content": content})
+        if session_id not in self._history:
+            self._history[session_id] = []
+        self._history[session_id].append({"role": role, "content": content})
         logger.info(f"Saved {role} message to session {session_id}")
 
 # MCP Gateway integration is handled by langchain_mcp_adapters
@@ -52,7 +40,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 app = BedrockAgentCoreApp()
 
 # Attach memory component
-app.memory = MemoryClient(os.environ.get("AGENTCORE_MEMORY_ID"))
+app.memory = MemoryClient()
 
 # ── Agent Logic ───────────────────────────────────────────────────────────────
 

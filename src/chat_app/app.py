@@ -175,9 +175,10 @@ async def _run_agentcore(user_message: str, session_id: str):
 
     try:
         # boto3 invoke_agent_runtime is synchronous — run it in a thread so we don't
-        # block the Chainlit event loop.
+        # block the Chainlit event loop.  We also consume the StreamingBody
+        # inside the thread so the blocking I/O never touches the event loop.
         def _call_agent():
-            return bedrock_client.invoke_agent_runtime(
+            resp = bedrock_client.invoke_agent_runtime(
                 agentRuntimeArn=AGENTCORE_AGENT_ID,
                 qualifier=AGENTCORE_AGENT_ALIAS_ID,
                 runtimeSessionId=session_id,
@@ -187,20 +188,10 @@ async def _run_agentcore(user_message: str, session_id: str):
                 }),
                 contentType="application/json",
             )
+            # response["response"] is a StreamingBody; read it fully in the thread.
+            return resp["response"].read().decode("utf-8")
 
-        response = await asyncio.to_thread(_call_agent)
-
-        # Collect streamed response chunks
-        final_content = ""
-        # The response payload is in the "response" field for AgentCore
-        for event in response.get("response", []):
-            if isinstance(event, str):
-                final_content += event
-            elif isinstance(event, dict):
-                # Handle potential JSON objects in the stream
-                final_content += json.dumps(event, indent=2) + "\n\n"
-            elif isinstance(event, bytes):
-                final_content += event.decode("utf-8")
+        final_content = await asyncio.to_thread(_call_agent)
 
         # Clean up JSON wrapping if present
         display_content = final_content

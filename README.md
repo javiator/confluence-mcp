@@ -15,7 +15,7 @@ A Model Context Protocol (MCP) server for Atlassian Confluence. This server prov
 - **Cloud-Native**: Powered by **AWS Bedrock AgentCore** for managed multi-agent orchestration.
 - **Search**: Find pages using Confluence Query Language (CQL), with improved logic for complex queries.
 - **Read/Write/Update**: Full CRUD capabilities with safety checks (AI-managed labels).
-- **Session Memory**: Persistent conversation history across AWS Lambda restarts.
+- **Session Memory**: In-container conversation history (resets on cold start; persistent memory can be added via `AGENTCORE_MEMORY_ID`).
 - **Cost Optimized**: Dynamic support for Claude 3 Haiku and Amazon Nova Lite.
 
 ## 📚 Documentation Guides
@@ -34,9 +34,9 @@ The project has transitioned to a high-performance, cloud-native architecture.
 3. **Chainlit UI**: Local/Remote frontend that communicates with the cloud runtime.
 
 **Key Components:**
-- **[server.py](src/confluence_mcp/server.py)**: The core MCP tool definitions.
-- **[agentcore_server.py](src/confluence_mcp/http_server/agentcore_server.py)**: The FastAPI wrapper for AWS Lambda integration.
-- **[app.py](src/confluence_mcp.chat_app/app.py)**: The Chainlit frontend.
+- **[server.py](src/mcp_server/server.py)**: The core MCP tool definitions.
+- **[main.py](agentcore_runtime/src/main.py)**: The AgentCore runtime entrypoint (LangGraph ReAct loop).
+- **[app.py](src/chat_app/app.py)**: The Chainlit frontend.
 
 ## 🚀 Getting Started
 
