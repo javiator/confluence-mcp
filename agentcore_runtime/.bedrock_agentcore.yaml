@@ -4,12 +4,12 @@ agents:
     name: agentcoreconfluence_agent
     language: python
     node_version: null
-    entrypoint: /home/javiator/work/projects/learning/confluence-mcp/src/confluence_mcp.chat_appcore_runtime/docker_agent/agentcoreconfluence/src/main.py
+    entrypoint: /home/javiator/work/projects/learning/confluence-mcp/agentcore_runtime/src/main.py
     deployment_type: container
     runtime_type: PYTHON_3_10
     platform: linux/amd64
     container_runtime: null
-    source_path: /home/javiator/work/projects/learning/confluence-mcp/src/confluence_mcp.chat_appcore_runtime/docker_agent/agentcoreconfluence
+    source_path: /home/javiator/work/projects/learning/confluence-mcp/agentcore_runtime
     aws:
       execution_role: arn:aws:iam::383226947124:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-7d4a9db68c
       execution_role_auto_create: false

@@ -7,7 +7,7 @@ set -e
 
 REGION="us-east-1"
 TF_DIR="terraform/agentcore_mcp"
-DOCKERFILE="Dockerfile"
+DOCKERFILE="src/mcp_server/Dockerfile"
 IMAGE_NAME="confluence-agentcore-mcp"
 FUNCTION_NAME="ConfluenceAgentCoreMCP"
 

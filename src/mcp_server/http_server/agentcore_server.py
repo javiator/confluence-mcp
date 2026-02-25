@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import after load_dotenv so env vars are available during server.py initialization
-from confluence_mcp.server import (
+from mcp_server.server import (
     BASE_URL,
     EMAIL,
     API_TOKEN,

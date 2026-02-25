@@ -31,7 +31,7 @@ The logic, memory, and orchestration run as a natively hosted AWS Bedrock AgentC
 > The `agentcore` CLI reads its configuration from a `.bedrock_agentcore.yaml` file. This file only exists inside `src/confluence_mcp/agentcore_runtime/docker_agent/agentcoreconfluence/`. You **must** be inside this specific directory whenever you run any `agentcore` commands, otherwise it will fail with a `Configuration not found` error.
 
 ```bash
-cd src/confluence_mcp/agentcore_runtime/docker_agent/agentcoreconfluence
+cd agentcore_runtime
 # Deploy to AWS Bedrock
 agentcore deploy --env BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
 ```
@@ -70,7 +70,7 @@ The `agentcore` CLI is your debug companion for the hosted Bedrock runtime.
 
 > [!WARNING]
 > Remember: You **must** run these commands from the directory containing the `.bedrock_agentcore.yaml` config file:
-> `cd src/confluence_mcp/agentcore_runtime/docker_agent/agentcoreconfluence`
+> `cd agentcore_runtime`
 
 **View Agent Status:**
 ```bash
@@ -100,7 +100,7 @@ If you are done and want to stop incurring any AWS costs, you must destroy the i
 
 ### A. Delete the Hosted AgentCore Application
 ```bash
-cd src/confluence_mcp/agentcore_runtime/docker_agent/agentcoreconfluence
+cd agentcore_runtime
 agentcore delete
 ```
 *Wait for this to complete. It removes the Bedrock configuration and CodeBuild projects.*

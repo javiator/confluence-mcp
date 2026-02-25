@@ -25,7 +25,7 @@ class MemoryStore:
     Stores conversation messages in a local SQLite database for persistence
     across sessions. Messages are serialized to JSON for storage.
 
-    Storage location: ~/.confluence_mcp/memory.db
+    Storage location: ~/.mcp_server/memory.db
     """
 
     def __init__(self, db_path: Optional[str] = None):
@@ -33,12 +33,12 @@ class MemoryStore:
 
         Args:
             db_path: Path to SQLite database. If None, uses default location
-                    (~/.confluence_mcp/memory.db)
+                    (~/.mcp_server/memory.db)
         """
         if db_path is None:
             # Default storage in user's home directory
             home = Path.home()
-            conf_dir = home / ".confluence_mcp"
+            conf_dir = home / ".mcp_server"
             conf_dir.mkdir(exist_ok=True)
             db_path = str(conf_dir / "memory.db")
 

@@ -20,7 +20,7 @@ class MCPClient:
         # We run the server by executing the package module
         server_params = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "src.confluence_mcp"],
+            args=["-m", "src.mcp_server"],
             env=os.environ.copy()
         )
         
